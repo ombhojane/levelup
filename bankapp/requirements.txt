@@ -40,3 +40,8 @@ pandas
 python-dateutil
 pytz
 tzdata
+markdown
+
+# Text Processing
+markdown
+bleach

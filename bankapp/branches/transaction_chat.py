@@ -64,6 +64,10 @@ class TransactionChatAssistant:
             return self._generate_fallback_response(query, transactions_data, customer_id)
             
         try:
+            # If transaction data is empty or not provided, use direct query mode
+            if not transactions_data:
+                return self._generate_direct_response(query)
+            
             # Create prompt context with transaction data
             transactions_summary = self._create_transactions_summary(transactions_data)
             
@@ -116,9 +120,67 @@ If you need to refer to specific transactions, use their transaction IDs.
             print(f"Unexpected error in generate_response: {e}")
             return self._generate_fallback_response(query, transactions_data, customer_id)
     
+    def _generate_direct_response(self, query):
+        """
+        Generate a direct response to a query without transaction data
+        
+        Args:
+            query (str): The user's query
+            
+        Returns:
+            str: The assistant's response
+        """
+        try:
+            # Create a simple prompt for direct queries
+            prompt = f"""You are a banking fraud detection assistant powered by Gemini AI. 
+You specialize in helping users understand fraud prevention, security measures, 
+and how to identify suspicious transactions.
+
+USER QUERY: {query}
+
+Provide a helpful, accurate, and concise response focused on banking fraud and security.
+"""
+            
+            # Generate content using Gemini
+            contents = [
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=prompt)],
+                ),
+            ]
+            
+            generate_content_config = types.GenerateContentConfig(
+                temperature=0.2,
+                max_output_tokens=1024,
+                response_mime_type="text/plain",
+            )
+            
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=contents,
+                config=generate_content_config,
+            )
+            
+            # Extract text from response
+            return response.text
+            
+        except Exception as e:
+            print(f"Error generating direct response: {e}")
+            return f"I'm sorry, I couldn't process your query. Please try again or ask a different question. Error: {str(e)}"
+    
     def _generate_fallback_response(self, query, transactions_data, customer_id):
         """Generate a simple fallback response without using the API."""
         try:
+            # If no transaction data, provide generic fraud info
+            if not transactions_data:
+                fallback_responses = [
+                    "To identify fraud, look for unexpected transactions, calls from unknown numbers claiming to be your bank, or requests for personal information.",
+                    "Common signs of fraud include unexpected withdrawals, purchases you didn't make, and notifications about password changes you didn't request.",
+                    "If you suspect fraud, contact your bank immediately through their official phone number, freeze your accounts, and change your passwords.",
+                    "To protect your account, use strong unique passwords, enable two-factor authentication, and never share your banking details with anyone who contacts you first."
+                ]
+                return random.choice(fallback_responses)
+            
             query_lower = query.lower()
             total_count = len(transactions_data)
             fraud_count = sum(1 for t in transactions_data if t.get('label_for_fraud') == 1)

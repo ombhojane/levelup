@@ -8,4 +8,6 @@ urlpatterns = [
     path('insider-threat/', views.insider_threat, name='insider_threat'),  # Insider threat page
     path('api/risk-assessment/', views.risk_assessment_api, name='risk_assessment_api'),  # Risk assessment API endpoint
     path('api/insider-threat/logs/', views.insider_threat_logs_api, name='insider_threat_logs_api'),  # Insider threat logs API
+    path('api/transaction-chat/', views.transaction_chat, name='transaction_chat_api'),  # Transaction chat API endpoint
+    path('chatbot/', views.chat_bot, name='chatbot'),  # Chatbot page
 ]

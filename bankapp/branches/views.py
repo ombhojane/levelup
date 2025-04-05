@@ -15,6 +15,9 @@ from django.views.decorators.http import require_POST
 from .transaction_chat import TransactionChatAssistant
 # Import the new Gemini risk assessment agent
 from .risk_profiling.agents.risk_assessment_gemini import GeminiRiskAssessmentAgent
+import markdown
+import bleach
+from django.utils.safestring import mark_safe
 
 # Import risk profiling modules
 try:
@@ -276,8 +279,56 @@ def compliance_dashboard(request):
         print(f"Error in compliance dashboard: {error_details}")
         return render(request, 'compliance_dashboard.html', {'error': str(e)})
     
+@csrf_exempt
 def chat_bot(request):
-    return render(request, 'chatbot.html')
+    if request.method == 'POST':
+        try:
+            # Parse request data
+            data = json.loads(request.body)
+            query = data.get('query')
+            customer_id = data.get('customer_id', '20917')  # Default customer ID
+            
+            if not query:
+                return JsonResponse({'error': 'Query is required'}, status=400)
+            
+            # Initialize chat assistant and generate response
+            try:
+                chat_assistant = TransactionChatAssistant()
+                response_text = chat_assistant.generate_response(query, [], customer_id)
+                
+                # Process Markdown in the response
+                # Convert Markdown to HTML
+                html_response = markdown.markdown(response_text)
+                
+                # Sanitize HTML to prevent XSS attacks
+                allowed_tags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 
+                               'ul', 'ol', 'li', 'code', 'pre', 'blockquote', 'a', 'br']
+                allowed_attrs = {'a': ['href', 'title']}
+                cleaned_html = bleach.clean(
+                    html_response, 
+                    tags=allowed_tags, 
+                    attributes=allowed_attrs, 
+                    strip=True
+                )
+                
+                return JsonResponse({
+                    'response': response_text,
+                    'html_response': cleaned_html
+                })
+            except Exception as e:
+                print(f"Chat assistant error: {str(e)}")
+                return JsonResponse({
+                    'response': f"I encountered an error while processing your query. Please try again later. (Error: {str(e)})"
+                })
+        
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON in request'}, status=400)
+        except Exception as e:
+            print(f"Unexpected error in chat_bot: {str(e)}")
+            return JsonResponse({'error': f'Error processing request: {str(e)}'}, status=500)
+    else:
+        # GET request - render template
+        return render(request, 'chatbot.html')
 
 
 def fraud_detection(request):
