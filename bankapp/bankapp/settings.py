@@ -167,3 +167,6 @@ STATICFILES_DIRS = [
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Google API key for Gemini
+GOOGLE_API_KEY = os.environ.get('GOOGLE_API_KEY', '')

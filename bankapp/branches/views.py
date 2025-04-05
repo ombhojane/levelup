@@ -12,6 +12,8 @@ import json
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from .transaction_chat import TransactionChatAssistant
+# Import the new Gemini risk assessment agent
+from .risk_profiling.agents.risk_assessment_gemini import GeminiRiskAssessmentAgent
 
 # Import risk profiling modules
 try:
@@ -90,13 +92,52 @@ def compliance_dashboard(request):
     try:
         # Read the CSV file into a DataFrame
         transactions_df = pd.read_csv(csv_path)
+        total_transactions = len(transactions_df)
         
-        # Convert to list of dictionaries for template rendering
-        transactions = transactions_df.to_dict('records')
+        # Get the requested page and page size
+        page = request.GET.get('page', 1)
+        per_page = 10  # Number of transactions per page
         
-        # For each transaction, determine the status based on risk score
-        for transaction in transactions:
+        # Create a paginator for the dataframe
+        paginator = Paginator(transactions_df.to_dict('records'), per_page)
+        current_page = paginator.get_page(page)
+        
+        # Get transactions for the current page
+        current_transactions = current_page.object_list
+        
+        # Setup cache directory for risk assessments
+        risk_cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'risk_cache')
+        os.makedirs(risk_cache_dir, exist_ok=True)
+        page_cache_file = os.path.join(risk_cache_dir, f'transactions_risk_page_{page}.json')
+        
+        # Check if cache exists, otherwise generate risk assessments
+        if os.path.exists(page_cache_file):
+            try:
+                with open(page_cache_file, 'r') as f:
+                    current_transactions = json.load(f)
+            except Exception as e:
+                print(f"Error loading cached risk assessments: {e}")
+                os.remove(page_cache_file)  # Remove corrupted cache file
+                # Fall through to regenerate the risk assessments
+        
+        # If we don't have risk assessments (either no cache or corrupt cache), generate them
+        if not os.path.exists(page_cache_file):
+            # Initialize risk agent and assess transactions
+            risk_agent = GeminiRiskAssessmentAgent()
+            current_transactions = risk_agent.assess_transaction_risks_batch(current_transactions)
+            
+            # Cache the results
+            try:
+                with open(page_cache_file, 'w') as f:
+                    json.dump(current_transactions, f)
+            except Exception as e:
+                print(f"Error caching risk assessments: {e}")
+        
+        # Format transactions for display
+        for transaction in current_transactions:
             risk_score = transaction.get('risk_score', 0)
+            
+            # Set status based on risk score
             if risk_score < 30:
                 transaction['status'] = 'Validated'
                 transaction['status_class'] = 'bg-green-100 text-green-800'
@@ -107,10 +148,9 @@ def compliance_dashboard(request):
                 transaction['status'] = 'Frozen'
                 transaction['status_class'] = 'bg-red-100 text-red-800'
                 
-            # Format the timestamp to a more readable format
+            # Format date and time
             try:
                 transaction['formatted_date'] = pd.to_datetime(transaction['timestamp']).strftime('%b %d, %Y')
-                # Calculate time ago for display
                 time_diff = pd.Timestamp.now() - pd.to_datetime(transaction['timestamp'])
                 if time_diff.days > 0:
                     transaction['time_ago'] = f"{time_diff.days}d ago"
@@ -125,26 +165,62 @@ def compliance_dashboard(request):
                 transaction['formatted_date'] = 'N/A'
                 transaction['time_ago'] = 'N/A'
                 
-            # Format the amount for better display
+            # Format amount
             try:
                 transaction['formatted_amount'] = f"₹{float(transaction['transaction_amount']):,.2f}"
             except:
                 transaction['formatted_amount'] = 'N/A'
         
-        # Calculate stats for the cards
-        high_risk_count = sum(1 for t in transactions if t.get('risk_score', 0) >= 70)
-        avg_risk_score = sum(t.get('risk_score', 0) for t in transactions) / len(transactions) if transactions else 0
-        pattern_anomalies = sum(1 for t in transactions if t.get('smurfing_indicator', 0) == 1)
-        insider_threats = sum(1 for t in transactions if t.get('previous_fraud_flag', 0) == 1)
+        # Load or calculate dashboard stats
+        stats_cache_file = os.path.join(risk_cache_dir, 'transaction_stats.json')
+        
+        if os.path.exists(stats_cache_file):
+            try:
+                with open(stats_cache_file, 'r') as f:
+                    stats = json.load(f)
+                    high_risk_count = stats.get('high_risk_count', 0)
+                    avg_risk_score = stats.get('avg_risk_score', 0)
+                    pattern_anomalies = stats.get('pattern_anomalies', 0)
+                    insider_threats = stats.get('insider_threats', 0)
+            except Exception as e:
+                print(f"Error loading cached stats: {e}")
+                os.remove(stats_cache_file)  # Remove corrupted cache file
+                # Fall through to regenerate the stats
+        
+        # If we don't have stats (either no cache or corrupt cache), calculate them
+        if not os.path.exists(stats_cache_file):
+            # Calculate stats from current page
+            high_risk_count = sum(1 for t in current_transactions if t.get('risk_score', 0) >= 70)
+            avg_risk_score = sum(t.get('risk_score', 0) for t in current_transactions) / len(current_transactions) if current_transactions else 0
+            pattern_anomalies = sum(1 for t in transactions_df.to_dict('records') if t.get('smurfing_indicator', 0) == 1)
+            insider_threats = sum(1 for t in transactions_df.to_dict('records') if t.get('previous_fraud_flag', 0) == 1)
+            
+            # Cache the stats
+            try:
+                stats = {
+                    'high_risk_count': high_risk_count,
+                    'avg_risk_score': avg_risk_score,
+                    'pattern_anomalies': pattern_anomalies,
+                    'insider_threats': insider_threats
+                }
+                with open(stats_cache_file, 'w') as f:
+                    json.dump(stats, f)
+            except Exception as e:
+                print(f"Error caching stats: {e}")
         
         # Prepare context for template
         context = {
-            'transactions': transactions,
+            'transactions': current_transactions,
             'high_risk_count': high_risk_count,
             'avg_risk_score': round(avg_risk_score, 1),
             'pattern_anomalies': pattern_anomalies,
             'insider_threats': insider_threats,
-            'total_transactions': len(transactions)
+            'total_transactions': total_transactions,
+            'has_previous': current_page.has_previous(),
+            'has_next': current_page.has_next(),
+            'current_page': int(page),
+            'total_pages': paginator.num_pages,
+            'page_range': paginator.page_range
         }
         
         return render(request, 'compliance_dashboard.html', context)

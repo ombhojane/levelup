@@ -118,7 +118,7 @@
             <div class="flex justify-between items-center border-b border-gray-200 pb-4">
                 <div class="flex items-center gap-3">
                     <h2 class="text-lg font-semibold text-gray-900">All Transactions</h2>
-                    <span class="text-sm text-gray-500">(Showing {{ total_transactions }} transactions)</span>
+                    <span class="text-sm text-gray-500">(Showing {{ transactions|length }} of {{ total_transactions }} transactions)</span>
                 </div>
                 <div class="flex items-center gap-4">
                     <div class="relative">
@@ -166,7 +166,7 @@
                              data-account="{{ transaction.customer_account_number }}"
                              data-recipient="{{ transaction.to_recipient_customer_account }}"
                              data-risk="{{ transaction.risk_score }}"
-                             data-explanation="{{ transaction.risk_explanation }}">
+                             data-explanation="{{ transaction.risk_explanation|default:'No detailed risk explanation available.' }}">
                             <div class="w-1/4">
                                 <div class="font-medium text-gray-900">Customer #{{ transaction.customer_account_number }}</div>
                                 <div class="text-gray-500 flex items-center gap-1.5">
@@ -213,7 +213,28 @@
             <!-- Pagination -->
             <div class="mt-4 flex items-center justify-between">
                 <div class="text-sm text-gray-500">
-                    Showing all {{ total_transactions }} transactions
+                    Page {{ current_page }} of {{ total_pages }} ({{ total_transactions }} total)
+                </div>
+                <div class="flex space-x-2">
+                    {% if has_previous %}
+                    <a href="?page={{ current_page|add:'-1' }}" class="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-200 text-sm font-medium">
+                        Previous
+                    </a>
+                    {% else %}
+                    <button disabled class="px-4 py-2 bg-gray-100 text-gray-400 rounded-lg text-sm font-medium cursor-not-allowed">
+                        Previous
+                    </button>
+                    {% endif %}
+                    
+                    {% if has_next %}
+                    <a href="?page={{ current_page|add:'1' }}" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm font-medium">
+                        Next
+                    </a>
+                    {% else %}
+                    <button disabled class="px-4 py-2 bg-gray-100 text-gray-400 rounded-lg text-sm font-medium cursor-not-allowed">
+                        Next
+                    </button>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -270,33 +291,34 @@
         
     </div>
     <script>
-        function getCurrentDate() {
+        // Display current date
+        document.addEventListener('DOMContentLoaded', function() {
+            // Show current date
             const now = new Date();
             const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-            return now.toLocaleDateString('en-US', options);
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('current-date').innerText = getCurrentDate();
+            document.getElementById('current-date').innerText = now.toLocaleDateString('en-US', options);
             
             // Add click handlers for card links
             document.querySelectorAll('.card-link').forEach(card => {
                 card.addEventListener('click', function() {
                     const url = this.getAttribute('data-url');
-                    if (url) {
-                        window.location.href = url;
-                    }
+                    if (url) window.location.href = url;
                 });
             });
             
-            // Transaction row click handler
+            // Transaction modal handling
+            setupTransactionModal();
+            
+            // Transaction filtering
+            setupFiltering();
+        });
+        
+        // Set up transaction detail modal
+        function setupTransactionModal() {
             const transactionRows = document.querySelectorAll('.transaction-row');
             const modal = document.getElementById('transaction-modal');
             const closeModal = document.getElementById('close-modal');
             const closeBtn = document.getElementById('close-btn');
-            
-            // Count transactions by status
-            updateStatusCounts();
             
             // Add click event to transaction rows
             transactionRows.forEach(row => {
@@ -306,7 +328,6 @@
                     const recipient = this.getAttribute('data-recipient');
                     const risk = this.getAttribute('data-risk');
                     const explanation = this.getAttribute('data-explanation');
-                    const status = this.getAttribute('data-status');
                     
                     // Set modal content
                     document.getElementById('modal-customer').textContent = customer;
@@ -337,17 +358,22 @@
                     modal.classList.add('hidden');
                 });
             });
-            
-            // Filter functionality
+        }
+        
+        // Set up transaction filtering
+        function setupFiltering() {
+            const transactionRows = document.querySelectorAll('.transaction-row');
             const statusFilter = document.getElementById('status-filter');
             const searchInput = document.getElementById('search-input');
             const filterButtons = document.querySelectorAll('.filter-btn');
             
+            // Update initial counts
+            updateStatusCounts();
+            
             // Filter button click handler
             filterButtons.forEach(button => {
                 button.addEventListener('click', function() {
-                    const filterValue = this.getAttribute('data-filter');
-                    statusFilter.value = filterValue;
+                    statusFilter.value = this.getAttribute('data-filter');
                     filterTransactions();
                 });
             });
@@ -363,41 +389,38 @@
                 const status = statusFilter.value;
                 const searchTerm = searchInput.value.toLowerCase();
                 
+                let visibleCount = 0;
+                
                 transactionRows.forEach(row => {
                     const rowStatus = row.getAttribute('data-status');
                     const customer = row.getAttribute('data-account');
                     const recipient = row.getAttribute('data-recipient');
                     
                     const statusMatch = status === 'all' || rowStatus === status;
-                    const searchMatch = 
-                        !searchTerm || 
-                        customer.includes(searchTerm) || 
-                        recipient.includes(searchTerm);
+                    const searchMatch = !searchTerm || 
+                                      customer.includes(searchTerm) || 
+                                      recipient.includes(searchTerm);
                     
                     if (statusMatch && searchMatch) {
                         row.style.display = '';
+                        visibleCount++;
                     } else {
                         row.style.display = 'none';
                     }
                 });
                 
-                // Update counts after filtering
-                updateVisibleCount();
+                // Update display count
+                document.querySelector('.text-sm.text-gray-500').textContent = 
+                    `Page {{ current_page }} of {{ total_pages }} (showing ${visibleCount} of {{ total_transactions }} total)`;
             }
             
-            // Update status counts
+            // Update status counts for filter buttons
             function updateStatusCounts() {
                 const reviewCount = document.querySelectorAll('.transaction-row[data-status="Under Review"]').length;
                 document.getElementById('review-count').textContent = reviewCount;
             }
-            
-            // Update visible count
-            function updateVisibleCount() {
-                const visibleRows = document.querySelectorAll('.transaction-row[style=""]').length;
-                document.querySelector('.text-sm.text-gray-500').textContent = 
-                    `Showing ${visibleRows} of ${transactionRows.length} transactions`;
-            }
-        });
+        }
     </script>
 </body>
 </html>
+
