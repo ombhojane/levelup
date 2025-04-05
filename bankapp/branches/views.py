@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect
 from django.db import connection  # Connect to MySQL RDS
 from django.contrib.auth import logout
+from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
 import pandas as pd
@@ -245,6 +246,9 @@ def pattern_analysis(request):
     return render(request, 'pattern_analysis.html')
 
 def insider_threat(request):
+    """
+    Renders the insider threat detection template
+    """
     return render(request, 'insider_threat.html')
 
 def reports(request):
@@ -327,9 +331,13 @@ def get_segmentation_data(request, segment_type, subcategory):
 def customers_page(request):
     return render(request, 'customers_page.html')
 
+@login_required
 def logout_view(request):
     logout(request)
     return redirect('branch_login')
+
+def chatbot_view(request):
+    return render(request, 'chatbot.html')
 
 def transactions(request):
     # Path to the CSV file
@@ -601,13 +609,6 @@ def risk_assessment_api(request):
     except Exception as e:
         print(f"Error in risk_assessment_api: {str(e)}")
         return JsonResponse({'error': f'Error processing risk assessment: {str(e)}'}, status=500)
-
-
-def insider_threat(request):
-    """
-    Renders the insider threat detection template
-    """
-    return render(request, 'insider_threat.html')
 
 @csrf_exempt
 @require_POST
