@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinBuddy Chatbot</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&icon_names=ios_share" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'poppins': ['Poppins', 'sans-serif'],
+                        'montserrat': ['Montserrat', 'sans-serif'],
+                    },
+                    colors: {
+                        'primary-blue': '#0066ff',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .resize-handle {
+            position: absolute;
+            height: 100%;
+            width: 8px;
+            background-color: #e2e8f0;
+            cursor: col-resize;
+            z-index: 30;
+            top: 0;
+            left: 0;
+            transition: background-color 0.2s;
+        }
+        .resize-handle:hover {
+            background-color: #0066ff;
+        }
+        .resize-handle::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            height: 30px;
+            width: 4px;
+            background-color: #94a3b8;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="font-poppins">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Main Chat Section -->
+        <div id="chatSection" class="w-[60%] min-w-[30%] max-w-[80%] bg-blue-50 flex flex-col justify-between relative">
+            <!-- Header -->
+            <div class="flex justify-between items-start p-6 border-b border-gray-200">
+                <div class="flex flex-col items-start">
+                    <h1 class="text-2xl font-bold"><span class="text-primary-blue">Fin</span>Buddy</h1>
+                    <span class="text-green-500 text-sm">🟢 online</span>
+                </div>
+            </div>
+
+            <!-- Chat area -->
+            <div class="flex-1 flex flex-col items-center justify-center p-6 overflow-y-auto">
+                <div class="flex gap-2.5 mb-5 flex-wrap justify-center">
+                    <button class="bg-white border border-gray-300 px-5 py-2.5 text-sm rounded-full hover:bg-gray-100 transition-colors duration-300">
+                        What are Tax-Saving investment options in India?
+                    </button>
+                    <button class="bg-white border border-gray-300 px-5 py-2.5 text-sm rounded-full hover:bg-gray-100 transition-colors duration-300">
+                        What are Mutual Funds?
+                    </button>
+                    <button class="bg-white border border-gray-300 px-5 py-2.5 text-sm rounded-full hover:bg-gray-100 transition-colors duration-300">
+                        What are the current Trending Stocks?
+                    </button>
+                </div>
+                
+                <div class="flex items-center gap-2.5 w-full max-w-lg mt-auto">
+                    <input type="text" placeholder="Ask Anything" class="w-full px-4 py-3 border border-gray-300 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button class="bg-green-500 text-white p-3 rounded-full hover:bg-green-600 transition-colors duration-300">🔊</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Resize Handle -->
+        <div id="resizeHandle" class="resize-handle"></div>
+        
+        <!-- Canvas Section -->
+        <div id="canvasSection" class="flex-1 bg-white flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold">Canvas</h2>
+                <div class="flex gap-2">
+                    <button id="expandCanvas" class="text-gray-600 hover:text-primary-blue">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h4a1 1 0 010 2H6.414l2.293 2.293a1 1 0 01-1.414 1.414L5 6.414V8a1 1 0 01-2 0V4zm9 1a1 1 0 010-2h4a1 1 0 011 1v4a1 1 0 01-2 0V6.414l-2.293 2.293a1 1 0 11-1.414-1.414L13.586 5H12zm-9 7a1 1 0 012 0v1.586l2.293-2.293a1 1 0 011.414 1.414L6.414 15H8a1 1 0 010 2H4a1 1 0 01-1-1v-4zm13-1a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 010-2h1.586l-2.293-2.293a1 1 0 011.414-1.414L15 13.586V12a1 1 0 011-1z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                    <button id="shrinkCanvas" class="text-gray-600 hover:text-primary-blue">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="flex-1 p-4 overflow-auto">
+                <canvas id="visualizationCanvas" class="w-full h-full border border-gray-200 rounded"></canvas>
+            </div>
+            <div class="p-4 border-t border-gray-200">
+                <div class="flex gap-2">
+                    <button class="bg-primary-blue text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">Save</button>
+                    <button class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition-colors">Reset</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatSection = document.getElementById('chatSection');
+            const resizeHandle = document.getElementById('resizeHandle');
+            const expandCanvas = document.getElementById('expandCanvas');
+            const shrinkCanvas = document.getElementById('shrinkCanvas');
+            
+            // Initial positioning of resize handle
+            updateResizeHandlePosition();
+            
+            // Resize functionality
+            let isResizing = false;
+            
+            resizeHandle.addEventListener('mousedown', function(e) {
+                isResizing = true;
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+            });
+            
+            document.addEventListener('mousemove', function(e) {
+                if (!isResizing) return;
+                
+                const containerWidth = document.body.clientWidth;
+                let newWidth = (e.clientX / containerWidth) * 100;
+                
+                // Enforce min/max constraints
+                newWidth = Math.max(30, Math.min(80, newWidth));
+                
+                chatSection.style.width = `${newWidth}%`;
+                updateResizeHandlePosition();
+            });
+            
+            document.addEventListener('mouseup', function() {
+                if (isResizing) {
+                    isResizing = false;
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                }
+            });
+            
+            // Quick resize buttons
+            expandCanvas.addEventListener('click', function() {
+                chatSection.style.width = '30%';
+                updateResizeHandlePosition();
+            });
+            
+            shrinkCanvas.addEventListener('click', function() {
+                chatSection.style.width = '80%';
+                updateResizeHandlePosition();
+            });
+            
+            // Update resize handle position
+            function updateResizeHandlePosition() {
+                const chatRect = chatSection.getBoundingClientRect();
+                resizeHandle.style.left = `${chatRect.right}px`;
+            }
+            
+            // Handle window resize
+            window.addEventListener('resize', updateResizeHandlePosition);
+            
+            // Initialize canvas for visualization
+            const vizCanvas = document.getElementById('visualizationCanvas');
+            const ctx = vizCanvas.getContext('2d');
+            
+            // Set canvas dimensions to match its display size
+            function resizeCanvas() {
+                const canvas = document.getElementById('visualizationCanvas');
+                canvas.width = canvas.clientWidth;
+                canvas.height = canvas.clientHeight;
+                
+                // Redraw canvas content after resize
+                drawSampleVisualization();
+            }
+            
+            // Sample visualization - just a placeholder
+            function drawSampleVisualization() {
+                if (!ctx) return;
+                
+                const canvas = document.getElementById('visualizationCanvas');
+                const width = canvas.width;
+                const height = canvas.height;
+                
+                ctx.clearRect(0, 0, width, height);
+                
+                // Draw a simple chart background
+                ctx.fillStyle = '#f8fafc';
+                ctx.fillRect(0, 0, width, height);
+                
+                // Draw grid lines
+                ctx.strokeStyle = '#e2e8f0';
+                ctx.lineWidth = 1;
+                
+                // Horizontal grid lines
+                for (let i = 0; i < height; i += 30) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, i);
+                    ctx.lineTo(width, i);
+                    ctx.stroke();
+                }
+                
+                // Vertical grid lines
+                for (let i = 0; i < width; i += 30) {
+                    ctx.beginPath();
+                    ctx.moveTo(i, 0);
+                    ctx.lineTo(i, height);
+                    ctx.stroke();
+                }
+                
+                // Sample data - mock financial chart
+                const data = [];
+                for (let i = 0; i < 20; i++) {
+                    data.push(Math.random() * 100 + 50);
+                }
+                
+                // Draw line chart
+                ctx.strokeStyle = '#0066ff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                
+                const step = width / (data.length - 1);
+                for (let i = 0; i < data.length; i++) {
+                    const x = i * step;
+                    const y = height - (data[i] / 150) * height;
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                
+                ctx.stroke();
+                
+                // Add points
+                ctx.fillStyle = '#0066ff';
+                for (let i = 0; i < data.length; i++) {
+                    const x = i * step;
+                    const y = height - (data[i] / 150) * height;
+                    
+                    ctx.beginPath();
+                    ctx.arc(x, y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            
+            // Resize and draw canvas on load
+            resizeCanvas();
+            
+            // Resize canvas when window is resized or resizing happens
+            window.addEventListener('resize', function() {
+                updateResizeHandlePosition();
+                resizeCanvas();
+            });
+            
+            // Redraw canvas when resizing ends
+            document.addEventListener('mouseup', function() {
+                if (isResizing) {
+                    resizeCanvas();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

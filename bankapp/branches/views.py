@@ -227,6 +227,10 @@ def compliance_dashboard(request):
     except Exception as e:
         # If there's an error, pass the error message to the template
         return render(request, 'compliance_dashboard.html', {'error': str(e)})
+    
+def chat_bot(request):
+    return render(request, 'chatbot.html')
+
 
 def fraud_detection(request):
     return render(request, 'fraud_detection.html')
