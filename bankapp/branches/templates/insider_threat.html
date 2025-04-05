@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insider Threat Detection</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #transactionModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 50;
+        }
+        
+        .modal-open {
+        overflow: hidden;
+        }
+        
+        .modal-backdrop {
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            transform: scale(0.95);
+            opacity: 0;
+            transition: all 0.3s ease-in-out;
+        }
+
+        .modal-active .modal-content {
+            transform: scale(1);
+            opacity: 1;
+        }
+        
+        .loading-spinner {
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #09f;
+            animation: spin 1s ease infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Add these styles to your existing style block */
+        .table-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 0 -1rem;
+            padding: 0 1rem;
+        }
+
+        .table-container::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .table-container::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Make the table take full width within the container */
+        .table-container table {
+            min-width: 100%;
+            width: max-content;
+        }
+    </style>
+</head>
+<body class="p-6">
+    <div class="min-h-screen bg-gray-50">
+      
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+       
+            <!-- Insider Threat Table Section -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="flex justify-between items-center mb-6 p-6">
+                    <div>
+                        <p class="font-semibold text-lg">Insider Threat Alerts</p>
+                        <p class="text-sm text-gray-500">AI-powered analysis of suspicious employee activities</p>
+                    </div>
+                    <div class="flex gap-3">
+                        <div class="relative">
+                            <input type="text" 
+                                id="search-input"
+                                placeholder="Search alerts..." 
+                                class="pl-9 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm">
+                            <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
+                        </div>
+                        <select id="severity-filter" class="px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                            <option value="all">All Severity</option>
+                            <option value="Critical">Critical</option>
+                            <option value="High">High</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Low">Low</option>
+                        </select>
+                        <button id="generate-logs-btn" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium transition-colors duration-150">
+                            Generate Logs
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Stats Row -->
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 px-6 mb-6">
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                        <p class="text-xs text-blue-500 font-medium uppercase">Total Alerts</p>
+                        <p id="stat-total-alerts" class="text-2xl font-bold text-blue-700">0</p>
+                    </div>
+                    <div class="bg-red-50 p-4 rounded-lg border border-red-100">
+                        <p class="text-xs text-red-500 font-medium uppercase">Critical</p>
+                        <p id="stat-critical-alerts" class="text-2xl font-bold text-red-700">0</p>
+                    </div>
+                    <div class="bg-orange-50 p-4 rounded-lg border border-orange-100">
+                        <p class="text-xs text-orange-500 font-medium uppercase">High</p>
+                        <p id="stat-high-alerts" class="text-2xl font-bold text-orange-700">0</p>
+                    </div>
+                    <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-100">
+                        <p class="text-xs text-yellow-500 font-medium uppercase">Medium</p>
+                        <p id="stat-medium-alerts" class="text-2xl font-bold text-yellow-700">0</p>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-100">
+                        <p class="text-xs text-green-500 font-medium uppercase">Average Risk Score</p>
+                        <p id="stat-avg-risk-score" class="text-2xl font-bold text-green-700">0</p>
+                    </div>
+                </div>
+            
+                <div class="overflow-hidden rounded-lg border border-gray-200">
+                    <!-- Add table-container wrapper -->
+                    <div class="table-container">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="bg-gray-50">
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Alert ID</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Activity Type</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Severity</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="alerts-table-body" class="divide-y divide-gray-200">
+                                <tr>
+                                    <td colspan="9" class="px-4 py-8 text-center text-gray-500">
+                                        <p>Click "Generate Logs" to analyze insider threats</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            
+                <div class="flex items-center justify-between mt-4 p-6">
+                    <p id="pagination-info" class="text-sm text-gray-500">Showing 0 alerts</p>
+                    <div class="flex gap-2">
+                        <button id="prev-page-btn" class="px-4 py-2 text-sm border rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+                        <button id="next-page-btn" class="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading Overlay -->
+            <div id="loading-overlay" class="hidden fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+                <div class="bg-white p-6 rounded-lg shadow-xl flex flex-col items-center">
+                    <div class="loading-spinner mb-4"></div>
+                    <p class="text-gray-700 font-medium">Processing logs, please wait...</p>
+                    <p class="text-gray-500 text-sm mt-2">Gemini AI is analyzing insider threats</p>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <footer class="mt-8 text-center">
+                <p class="text-sm text-center text-gray-500 mt-6">⚡ Powered by UBIShield AI</p>
+            </footer>
+        </main>
+    </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // DOM Elements
+        const generateLogsBtn = document.getElementById('generate-logs-btn');
+        const alertsTableBody = document.getElementById('alerts-table-body');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const searchInput = document.getElementById('search-input');
+        const severityFilter = document.getElementById('severity-filter');
+        const prevPageBtn = document.getElementById('prev-page-btn');
+        const nextPageBtn = document.getElementById('next-page-btn');
+        const paginationInfo = document.getElementById('pagination-info');
+        
+        // Stats elements
+        const statTotalAlerts = document.getElementById('stat-total-alerts');
+        const statCriticalAlerts = document.getElementById('stat-critical-alerts');
+        const statHighAlerts = document.getElementById('stat-high-alerts');
+        const statMediumAlerts = document.getElementById('stat-medium-alerts');
+        const statAvgRiskScore = document.getElementById('stat-avg-risk-score');
+        
+        // Pagination state
+        let currentPage = 1;
+        const itemsPerPage = 10;
+        let filteredAlerts = [];
+        
+        // Fetch and process logs
+        generateLogsBtn.addEventListener('click', function() {
+            loadingOverlay.classList.remove('hidden');
+            
+            fetch('/api/insider-threat/logs/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({}) // Send empty JSON object
+            })
+            .then(response => {
+                // Check if response is ok (status in the range 200-299)
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    // Store all alerts
+                    filteredAlerts = data.alerts;
+                    
+                    // Update stats
+                    updateStats(data.stats);
+                    
+                    // Render alerts
+                    renderAlerts();
+                } else {
+                    alertsTableBody.innerHTML = `
+                        <tr>
+                            <td colspan="9" class="px-4 py-8 text-center text-red-500">
+                                <p>Error: ${data.error || 'Failed to load alerts'}</p>
+                            </td>
+                        </tr>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alertsTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="px-4 py-8 text-center text-red-500">
+                            <p>Error: ${error.message || 'Failed to load alerts'}</p>
+                        </td>
+                    </tr>
+                `;
+            })
+            .finally(() => {
+                loadingOverlay.classList.add('hidden');
+            });
+        });
+        
+        // Update Stats
+        function updateStats(stats) {
+            statTotalAlerts.textContent = stats.total_alerts;
+            statCriticalAlerts.textContent = stats.critical_alerts;
+            statHighAlerts.textContent = stats.high_alerts;
+            statMediumAlerts.textContent = stats.medium_alerts;
+            statAvgRiskScore.textContent = stats.avg_risk_score;
+        }
+        
+        // Filter alerts
+        function filterAlerts() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const severityValue = severityFilter.value;
+            
+            // Reset to first page when filtering
+            currentPage = 1;
+            
+            return filteredAlerts.filter(alert => {
+                // Check if matches search term
+                const matchesSearch = 
+                    alert.alert_id.toLowerCase().includes(searchTerm) ||
+                    alert.employee.name.toLowerCase().includes(searchTerm) ||
+                    alert.employee.department.toLowerCase().includes(searchTerm) ||
+                    alert.activity.type.toLowerCase().includes(searchTerm);
+                
+                // Check if matches severity filter
+                const matchesSeverity = severityValue === 'all' || alert.severity === severityValue;
+                
+                return matchesSearch && matchesSeverity;
+            });
+        }
+        
+        // Render alerts with pagination
+        function renderAlerts() {
+            const filtered = filterAlerts();
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const pageAlerts = filtered.slice(startIndex, endIndex);
+            
+            // Update pagination info
+            paginationInfo.textContent = `Showing ${filtered.length > 0 ? startIndex + 1 : 0}-${Math.min(endIndex, filtered.length)} of ${filtered.length} alerts`;
+            
+            // Enable/disable pagination buttons
+            prevPageBtn.disabled = currentPage === 1;
+            nextPageBtn.disabled = endIndex >= filtered.length;
+            
+            // Clear table
+            alertsTableBody.innerHTML = '';
+            
+            if (filtered.length === 0) {
+                alertsTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="px-4 py-8 text-center text-gray-500">
+                            <p>No alerts found</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            // Add rows
+            pageAlerts.forEach(alert => {
+                let severityColorClass = '';
+                let statusColorClass = '';
+                
+                // Determine severity color
+                switch (alert.severity) {
+                    case 'Critical':
+                        severityColorClass = 'bg-red-500';
+                        break;
+                    case 'High':
+                        severityColorClass = 'bg-orange-500';
+                        break;
+                    case 'Medium':
+                        severityColorClass = 'bg-yellow-500';
+                        break;
+                    case 'Low':
+                        severityColorClass = 'bg-green-500';
+                        break;
+                }
+                
+                // Determine status color
+                switch (alert.status) {
+                    case 'Active':
+                        statusColorClass = 'bg-red-100 text-red-800';
+                        break;
+                    case 'Investigation':
+                        statusColorClass = 'bg-orange-100 text-orange-800';
+                        break;
+                    case 'Cleared':
+                        statusColorClass = 'bg-green-100 text-green-800';
+                        break;
+                }
+                
+                // Helper function to escape strings for HTML insertion
+                function escapeHtml(str) {
+                    if (!str) return '';
+                    return str.toString()
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#039;');
+                }
+                
+                // Safely escape values for the modal opening function
+                const safeAlertId = escapeHtml(alert.alert_id);
+                const safeEmpName = escapeHtml(alert.employee.name);
+                const safeEmpDept = escapeHtml(alert.employee.department);
+                const safeActivityDesc = escapeHtml(alert.activity.description);
+                const safeActivityTime = escapeHtml(alert.activity.time);
+                const safeActivityLocation = escapeHtml(alert.activity.location);
+                const safeSeverity = escapeHtml(alert.severity);
+                const safeActivityDetails = escapeHtml(alert.activity.details);
+                
+                // Prepare AI analysis data
+                const safeAnalysis = escapeHtml(alert.analysis || "");
+                
+                // Get recommendations array safely
+                let recommendationsArray = [];
+                if (alert.recommended_actions && Array.isArray(alert.recommended_actions)) {
+                    recommendationsArray = alert.recommended_actions.map(rec => escapeHtml(rec));
+                }
+                
+                // Store the recommendations data in a data attribute instead of trying to pass it directly to the function
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-red-50 transition-colors duration-150';
+                row.dataset.recommendations = JSON.stringify(recommendationsArray);
+                row.dataset.analysis = safeAnalysis;
+                
+                row.innerHTML = `
+                    <td class="px-4 py-3 text-sm font-medium text-gray-900">${escapeHtml(alert.alert_id)}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">
+                        <div class="flex items-center">
+                            <div class="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center mr-3">
+                                <span class="font-medium text-red-600">${escapeHtml(alert.employee.initials)}</span>
+                            </div>
+                            ${escapeHtml(alert.employee.name)}
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(alert.employee.department)}</td>
+                    <td class="px-4 py-3 text-sm">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            ${escapeHtml(alert.activity.type)}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(alert.activity.time)}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(alert.activity.location)}</td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center">
+                            <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                                <div class="${severityColorClass} h-2 rounded-full" style="width: ${alert.risk_score}%"></div>
+                            </div>
+                            <span class="text-sm font-medium text-gray-600">${escapeHtml(alert.severity)}</span>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColorClass}">
+                            ${alert.status === 'Active' ? '⚠ ' : ''}${escapeHtml(alert.status)}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <button onclick="openModalFromRow(this.closest('tr'), '${safeAlertId}', '${safeEmpName}', '${safeEmpDept}', '${safeActivityDesc}', '${safeActivityTime}', '${safeActivityLocation}', '${safeSeverity}', '${safeActivityDetails}')" 
+                                class="inline-flex items-center px-3 py-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors duration-150">
+                            <span class="font-medium text-sm">Investigate</span>
+                            <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+                        </button>
+                    </td>
+                `;
+                
+                alertsTableBody.appendChild(row);
+            });
+        }
+        
+        // Set up event listeners for pagination
+        prevPageBtn.addEventListener('click', function() {
+            if (currentPage > 1) {
+                currentPage--;
+                renderAlerts();
+            }
+        });
+        
+        nextPageBtn.addEventListener('click', function() {
+            const filtered = filterAlerts();
+            const maxPage = Math.ceil(filtered.length / itemsPerPage);
+            
+            if (currentPage < maxPage) {
+                currentPage++;
+                renderAlerts();
+            }
+        });
+        
+        // Set up event listeners for filtering
+        searchInput.addEventListener('input', function() {
+            renderAlerts();
+        });
+        
+        severityFilter.addEventListener('change', function() {
+            renderAlerts();
+        });
+    });
+</script>
+
+<!-- Alert Modal -->
+<div id="transactionModal" class="fixed inset-0 flex items-center justify-center modal-backdrop opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="modal-content bg-white p-8 rounded-xl shadow-2xl max-w-2xl w-full mx-4 relative">
+        <!-- Header -->
+        <div class="flex justify-between items-start mb-6 pb-4 border-b border-gray-200">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-900">Alert Details</h2>
+                <p class="text-sm text-gray-500 mt-1">Alert ID: <span id="modalTxId" class="font-medium"></span></p>
+            </div>
+            <button class="p-2 hover:bg-gray-100 rounded-full transition-colors" onclick="closeModal()">
+                <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Content Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <!-- Employee Details -->
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <h3 class="text-sm font-medium text-gray-500 mb-4">Employee Information</h3>
+                <div class="flex items-center mb-4">
+                    <div class="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center mr-3">
+                        <span id="modalEmpInitials" class="text-red-600 font-medium"></span>
+                    </div>
+                    <div>
+                        <p id="modalEmpId" class="font-medium text-gray-900"></p>
+                        <p id="modalEmpDept" class="text-sm text-gray-500"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity Details -->
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <h3 class="text-sm font-medium text-gray-500 mb-4">Activity Information</h3>
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Type:</span>
+                        <span id="modalActivityType" class="text-gray-900"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Time:</span>
+                        <span id="modalTime" class="text-gray-900"></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Location:</span>
+                        <span id="modalLocation" class="text-gray-900"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alert Description -->
+        <div class="mb-6">
+            <h3 class="text-sm font-medium text-gray-500 mb-2">Alert Description</h3>
+            <p id="modalNarration" class="text-gray-700 bg-gray-50 p-4 rounded-lg"></p>
+        </div>
+        
+        <!-- AI Analysis -->
+        <div class="mb-6">
+            <h3 class="text-sm font-medium text-gray-500 mb-2">AI Analysis</h3>
+            <p id="modalAnalysis" class="text-gray-700 bg-blue-50 p-4 rounded-lg"></p>
+        </div>
+        
+        <!-- Recommended Actions -->
+        <div class="mb-6">
+            <h3 class="text-sm font-medium text-gray-500 mb-2">Recommended Actions</h3>
+            <ul id="modalRecommendations" class="list-disc pl-5 text-gray-700 bg-green-50 p-4 rounded-lg"></ul>
+        </div>
+
+        <!-- Warning Banner -->
+        <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg flex items-start">
+            <svg class="w-5 h-5 text-red-600 mt-0.5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <div>
+                <p class="font-medium text-red-800">Critical Security Alert</p>
+                <p class="text-sm text-red-700 mt-1">This activity has been flagged as a potential insider threat.</p>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex justify-end gap-3 mt-6 pt-6 border-t border-gray-200">
+            <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                Close
+            </button>
+            <button class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                Escalate Alert
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openModalFromRow(row, alertId, empName, empDept, activityType, time, location, severity, description) {
+        // Debug
+        console.log("Opening modal for:", alertId);
+        console.log("Analysis:", row.dataset.analysis);
+        console.log("Recommendations:", row.dataset.recommendations);
+        
+        // Update modal content
+        document.getElementById('modalTxId').textContent = alertId;
+        document.getElementById('modalEmpId').textContent = empName;
+        document.getElementById('modalEmpDept').textContent = empDept;
+        document.getElementById('modalActivityType').textContent = activityType;
+        document.getElementById('modalTime').textContent = time;
+        document.getElementById('modalLocation').textContent = location;
+        document.getElementById('modalNarration').textContent = description;
+        
+        // Add AI analysis content
+        const analysis = row.dataset.analysis;
+        document.getElementById('modalAnalysis').textContent = analysis || "No AI analysis available";
+        
+        // Add recommendations
+        const recommendations = JSON.parse(row.dataset.recommendations);
+        const recommendationsElement = document.getElementById('modalRecommendations');
+        recommendationsElement.innerHTML = '';
+        
+        if (recommendations && Array.isArray(recommendations) && recommendations.length > 0) {
+            recommendations.forEach(rec => {
+                const li = document.createElement('li');
+                li.textContent = rec;
+                li.className = 'mb-1';
+                recommendationsElement.appendChild(li);
+            });
+        } else {
+            const li = document.createElement('li');
+            li.textContent = "No recommended actions available";
+            recommendationsElement.appendChild(li);
+        }
+        
+        // Set employee initials
+        document.getElementById('modalEmpInitials').textContent = empName.split(' ').map(n => n[0]).join('');
+        
+        const modal = document.getElementById('transactionModal');
+        modal.classList.remove('pointer-events-none');
+        modal.classList.add('opacity-100');
+        
+        setTimeout(() => {
+            modal.classList.add('modal-active');
+        }, 10);
+        
+        document.body.classList.add('modal-open');
+    }
+
+    function closeModal() {
+        const modal = document.getElementById('transactionModal');
+        modal.classList.remove('modal-active', 'opacity-100');
+        modal.classList.add('pointer-events-none');
+        
+        setTimeout(() => {
+            document.body.classList.remove('modal-open');
+        }, 300);
+    }
+
+    // Close modal when clicking outside
+    document.addEventListener('click', function(event) {
+        const modal = document.getElementById('transactionModal');
+        if (event.target === modal) {
+            closeModal();
+        }
+    });
+
+    // Close modal on escape key
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeModal();
+        }
+    });
+</script>
+   
+</body>
+</html>

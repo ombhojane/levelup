@@ -1,0 +1,42 @@
+# Web Framework
+Django
+djangorestframework
+gunicorn
+asgiref
+sqlparse
+
+# Database
+mysqlclient
+
+# Environment Variables
+python-dotenv
+
+# HTTP/API
+requests
+urllib3
+certifi
+charset-normalizer
+idna
+
+# AWS Integration (if needed)
+boto3
+botocore
+s3transfer
+jmespath
+
+# AI/ML (if using these features)
+langchain-core
+langchain-groq
+langsmith
+groq
+mistralai
+pydantic
+pydantic_core
+typing_extensions
+
+# Utilities
+numpy
+pandas
+python-dateutil
+pytz
+tzdata

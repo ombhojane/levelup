@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transactions | UBIShield</title>
+    {% load static %}
+    <link rel="icon" type="image/x-icon" href="https://res.cloudinary.com/ds2uw5gcw/image/upload/v1742113261/UBISHield_Logo_nd4wqc.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Add vis-network for graph visualization -->
+    <script src="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .transaction-row:hover {
+            background-color: rgba(59, 130, 246, 0.05);
+        }
+        .pagination-btn {
+            @apply px-3 py-1 rounded border border-gray-300 hover:bg-blue-50 hover:border-blue-300 transition-colors;
+        }
+        .pagination-btn.active {
+            @apply bg-blue-500 text-white border-blue-500 hover:bg-blue-600;
+        }
+        .graph-container {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            position: relative;
+        }
+        .stat-card {
+            @apply bg-white rounded-lg shadow p-4 flex flex-col;
+        }
+        .stat-value {
+            @apply text-2xl font-bold;
+        }
+        .stat-label {
+            @apply text-sm text-gray-500;
+        }
+        #mynetwork {
+            width: 100%;
+            height: 100%;
+        }
+        .legend {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 12px;
+            z-index: 10;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            margin-right: 5px;
+            border-radius: 50%;
+        }
+        .legend-edge {
+            width: 20px;
+            height: 3px;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <header class="mb-8">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <img src="https://res.cloudinary.com/ds2uw5gcw/image/upload/v1742113261/UBISHield_Logo_nd4wqc.png" 
+                         alt="UBIShield Logo" 
+                         class="w-8 h-8">
+                    <h1 class="text-2xl font-bold text-gray-800">Transactions</h1>
+                </div>
+                <a href="{% url 'compliance_dashboard' %}" class="text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                    Back to Dashboard
+                </a>
+            </div>
+            <div class="mt-2 text-sm text-gray-600">
+                Showing transactions for customer account: <span class="font-semibold">{{ customer_id }}</span>
+                {% if total_transactions %}
+                <span class="ml-2">({{ total_transactions }} transactions found)</span>
+                {% endif %}
+            </div>
+        </header>
+
+        {% if error %}
+        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        {% if page_obj %}
+        <div class="bg-white rounded-lg shadow overflow-hidden mb-8">
+            <div class="overflow-x-auto">
+                <table class="w-full whitespace-nowrap">
+                    <thead>
+                        <tr class="bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                            <th class="px-4 py-3">Transaction ID</th>
+                            <th class="px-4 py-3">Date</th>
+                            <th class="px-4 py-3">Amount</th>
+                            <th class="px-4 py-3">Method</th>
+                            <th class="px-4 py-3">Currency</th>
+                            <th class="px-4 py-3">Location</th>
+                            <th class="px-4 py-3">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        {% for transaction in page_obj %}
+                        <tr class="transaction-row text-sm">
+                            <td class="px-4 py-3 font-medium text-gray-900">{{ transaction.transaction_id }}</td>
+                            <td class="px-4 py-3 text-gray-600">{{ transaction.timestamp }}</td>
+                            <td class="px-4 py-3 font-medium {% if transaction.transaction_amount < 0 %}text-red-600{% else %}text-green-600{% endif %}">
+                                {{ transaction.transaction_amount|floatformat:2 }}
+                            </td>
+                            <td class="px-4 py-3 text-gray-600">{{ transaction.method_of_transaction }}</td>
+                            <td class="px-4 py-3 text-gray-600">{{ transaction.transaction_currency }}</td>
+                            <td class="px-4 py-3 text-gray-600">{{ transaction.location_data }}</td>
+                            <td class="px-4 py-3">
+                                {% if transaction.label_for_fraud == 1 %}
+                                <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">Flagged</span>
+                                {% else %}
+                                <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Normal</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if page_obj.paginator.num_pages > 1 %}
+            <div class="px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                    <div>
+                        <p class="text-sm text-gray-700">
+                            Showing <span class="font-medium">{{ page_obj.start_index }}</span> to 
+                            <span class="font-medium">{{ page_obj.end_index }}</span> of 
+                            <span class="font-medium">{{ page_obj.paginator.count }}</span> transactions
+                        </p>
+                    </div>
+                    <div>
+                        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                            {% if page_obj.has_previous %}
+                            <a href="?page={{ page_obj.previous_page_number }}&customer_id={{ customer_id }}" class="pagination-btn rounded-l-md">
+                                Previous
+                            </a>
+                            {% endif %}
+                            
+                            {% for i in page_obj.paginator.page_range %}
+                                {% if page_obj.number == i %}
+                                <a href="?page={{ i }}&customer_id={{ customer_id }}" class="pagination-btn active">{{ i }}</a>
+                                {% elif i > page_obj.number|add:'-3' and i < page_obj.number|add:'3' %}
+                                <a href="?page={{ i }}&customer_id={{ customer_id }}" class="pagination-btn">{{ i }}</a>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if page_obj.has_next %}
+                            <a href="?page={{ page_obj.next_page_number }}&customer_id={{ customer_id }}" class="pagination-btn rounded-r-md">
+                                Next
+                            </a>
+                            {% endif %}
+                        </nav>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Transaction Statistics -->
+        {% if stats %}
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Transaction Statistics</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="stat-card">
+                    <span class="stat-value">{{ stats.total_transactions }}</span>
+                    <span class="stat-label">Total Transactions</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value text-green-600">{{ stats.normal_transactions }}</span>
+                    <span class="stat-label">Normal Transactions</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value text-red-600">{{ stats.fraud_transactions }}</span>
+                    <span class="stat-label">Flagged Transactions</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value {% if stats.fraud_percentage >= 20 %}text-red-600{% else %}text-gray-800{% endif %}">
+                        {{ stats.fraud_percentage|floatformat:1 }}%
+                    </span>
+                    <span class="stat-label">Fraud Percentage</span>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h3 class="text-lg font-medium text-gray-800 mb-2">Transaction Methods</h3>
+                    <canvas id="methodsChart" height="200"></canvas>
+                </div>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <h3 class="text-lg font-medium text-gray-800 mb-2">Transaction Status</h3>
+                    <canvas id="statusChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="mb-8">
+    <h2 class="text-xl font-semibold text-gray-800 mb-6">Transaction Analytics</h2>
+    
+    <!-- Enhanced Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
+            <div class="flex items-center justify-between mb-4">
+                <div class="p-2 bg-blue-50 rounded-lg">
+                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <span class="text-sm font-medium text-blue-600">Total</span>
+            </div>
+            <p class="text-2xl font-bold text-gray-900">{{ stats.total_transactions }}</p>
+            <p class="text-sm text-gray-500 mt-1">Total Transactions</p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
+            <div class="flex items-center justify-between mb-4">
+                <div class="p-2 bg-green-50 rounded-lg">
+                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <span class="text-sm font-medium text-green-600">Normal</span>
+            </div>
+            <p class="text-2xl font-bold text-green-600">{{ stats.normal_transactions }}</p>
+            <p class="text-sm text-gray-500 mt-1">Normal Transactions</p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
+            <div class="flex items-center justify-between mb-4">
+                <div class="p-2 bg-red-50 rounded-lg">
+                    <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <span class="text-sm font-medium text-red-600">Flagged</span>
+            </div>
+            <p class="text-2xl font-bold text-red-600">{{ stats.fraud_transactions }}</p>
+            <p class="text-sm text-gray-500 mt-1">Flagged Transactions</p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition-shadow">
+            <div class="flex items-center justify-between mb-4">
+                <div class="p-2 bg-yellow-50 rounded-lg">
+                    <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/>
+                    </svg>
+                </div>
+                <span class="text-sm font-medium text-yellow-600">Risk Level</span>
+            </div>
+            <p class="text-2xl font-bold {% if stats.fraud_percentage >= 20 %}text-red-600{% else %}text-gray-900{% endif %}">
+                {{ stats.fraud_percentage|floatformat:1 }}%
+            </p>
+            <p class="text-sm text-gray-500 mt-1">Fraud Percentage</p>
+        </div>
+    </div>
+
+    <!-- Enhanced Charts Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div class="p-6 border-b border-gray-100">
+                <h3 class="text-lg font-medium text-gray-800">Transaction Methods</h3>
+                <p class="text-sm text-gray-500 mt-1">Distribution of transaction types</p>
+            </div>
+            <div class="p-6">
+                <canvas id="methodsChart" height="300"></canvas>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div class="p-6 border-b border-gray-100">
+                <h3 class="text-lg font-medium text-gray-800">Transaction Status</h3>
+                <p class="text-sm text-gray-500 mt-1">Overview of transaction flags</p>
+            </div>
+            <div class="p-6">
+                <canvas id="statusChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+        {% endif %}
+
+        <!-- Transaction Graph -->
+        {% if graph_data %}
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Transaction Network Graph</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div class="stat-card">
+                    <span class="stat-value">{{ graph_data.statistics.total_transactions }}</span>
+                    <span class="stat-label">Connected Accounts</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value">{{ graph_data.statistics.total_transactions }}</span>
+                    <span class="stat-label">Transaction Links</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value text-red-600">{{ graph_data.statistics.fraud_transactions }}</span>
+                    <span class="stat-label">Fraud Transactions</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value {% if graph_data.statistics.fraud_transactions >= 5 %}text-red-600{% else %}text-green-600{% endif %}">
+                        {% if graph_data.statistics.fraud_transactions >= 5 %}High Risk{% else %}Low Risk{% endif %}
+                    </span>
+                    <span class="stat-label">Account Risk Level</span>
+                </div>
+            </div>
+            
+            <p class="text-sm text-gray-600 mb-4">
+                This graph shows the transaction network for customer {{ customer_id }}. 
+                The central node represents the customer account, and the connected nodes represent other accounts involved in transactions.
+                Red edges indicate flagged transactions, while gray edges indicate normal transactions.
+                <span class="block mt-2">
+                    <strong>Tip:</strong> You can zoom in/out using the mouse wheel, drag nodes to reposition, and click on nodes or edges to see more details.
+                </span>
+            </p>
+            
+            <!-- Direct Visualization using vis.js -->
+            <div class="bg-white rounded-lg shadow p-4 mb-4">
+                <h3 class="text-lg font-medium text-gray-800 mb-2">Transaction Network Visualization</h3>
+                
+                <!-- Filter Controls -->
+                <div class="flex flex-wrap gap-2 mb-4">
+                    <button id="showAllBtn" class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 active">Show All</button>
+                    <button id="showFraudBtn" class="px-3 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300">Show Fraud Only</button>
+                    <button id="showGenuineBtn" class="px-3 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300">Show Genuine Only</button>
+                    <button id="highlightFraudBtn" class="px-3 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300">Highlight Fraud</button>
+                    <div class="relative ml-auto mr-2">
+                        <input type="text" id="searchNode" placeholder="Search counterparty..." 
+                               class="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <button id="searchBtn" class="ml-1 px-2 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 text-sm">Search</button>
+                    </div>
+                    <div>
+                        <span class="text-sm text-gray-600">Nodes: <span id="nodeCount">0</span> | Edges: <span id="edgeCount">0</span></span>
+                    </div>
+                </div>
+                
+            <div class="graph-container">
+                    <div id="mynetwork"></div>
+                    <div class="legend">
+                        <h3 style="margin-top: 0; font-size: 14px; font-weight: bold;">Legend</h3>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #4299e1;"></div>
+                            <span>RTGS</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #f6e05e;"></div>
+                            <span>NEFT</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #9f7aea;"></div>
+                            <span>UPI</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #4fd1c5;"></div>
+                            <span>IMPS</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #fc8181;"></div>
+                            <span>Direct</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #f56565;"></div>
+                            <span>High Risk</span>
+                        </div>
+                        <hr style="margin: 5px 0;">
+                        <div class="legend-item">
+                            <div class="legend-edge" style="background-color: #f56565;"></div>
+                            <span>Fraud</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-edge" style="background-color: #a0aec0;"></div>
+                            <span>Normal</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-2 text-sm text-gray-600">
+                    <p>Interact with the graph: Zoom with mouse wheel, drag nodes to reposition, click for details.</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Chat Interface for Transaction Queries -->
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Chat with Your Data</h2>
+            <div class="bg-white rounded-lg shadow">
+                <div class="p-4 border-b border-gray-200">
+                    <p class="text-sm text-gray-600">
+                        Ask questions about your transactions. Examples:
+                        <span class="block mt-1 pl-4">• "Show me all suspicious transactions in the last month"</span>
+                        <span class="block pl-4">• "Which transaction methods have the highest fraud rate?"</span>
+                        <span class="block pl-4">• "Analyze patterns in my flagged transactions"</span>
+                    </p>
+                </div>
+                
+                <div id="chat-messages" class="p-4 h-80 overflow-y-auto flex flex-col space-y-3 mb-4">
+                    <div class="flex justify-start">
+                        <div class="bg-gray-200 rounded-lg py-2 px-3 max-w-3/4">
+                            <p class="text-sm text-gray-800">
+                                Hi there! I'm your transaction assistant. How can I help you analyze your transaction data today?
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="p-4 border-t border-gray-200">
+                    <form id="chat-form" class="flex">
+                        <input type="text" id="chat-input" class="flex-1 border border-gray-300 rounded-l px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Ask a question about your transactions...">
+                        <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded-r hover:bg-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                            Send
+                        </button>
+                    </form>
+                    <div id="chat-status" class="hidden mt-2 text-sm text-gray-600 flex items-center">
+                        <svg class="animate-spin h-4 w-4 mr-2 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+                        Thinking...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if stats %}
+    <script>
+        // Parse the chart data from JSON
+        const chartData = JSON.parse('{{ chart_data_json|safe }}');
+        
+        // Transaction Methods Chart
+        const methodsCtx = document.getElementById('methodsChart').getContext('2d');
+        const methodsChart = new Chart(methodsCtx, {
+            type: 'doughnut',
+            data: {
+                labels: chartData.methods.labels,
+                datasets: [{
+                    data: chartData.methods.data,
+                    backgroundColor: [
+                        'rgba(54, 162, 235, 0.7)',
+                        'rgba(255, 99, 132, 0.7)',
+                        'rgba(255, 206, 86, 0.7)',
+                        'rgba(75, 192, 192, 0.7)',
+                        'rgba(153, 102, 255, 0.7)',
+                        'rgba(255, 159, 64, 0.7)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'right'
+                    }
+                }
+            }
+        });
+
+        // Transaction Status Chart
+        const statusCtx = document.getElementById('statusChart').getContext('2d');
+        const statusChart = new Chart(statusCtx, {
+            type: 'pie',
+            data: {
+                labels: ['Normal', 'Flagged'],
+                datasets: [{
+                    data: chartData.status.data,
+                    backgroundColor: [
+                        'rgba(75, 192, 192, 0.7)',
+                        'rgba(255, 99, 132, 0.7)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'right'
+                    }
+                }
+            }
+        });
+        
+        // Transaction Network Visualization using vis.js
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get ALL transaction data and convert it for visualization
+            const allTransactions = JSON.parse('{{ all_transactions_json|safe }}');
+            const customerId = "{{ customer_id }}";
+            
+            // Prepare nodes and edges
+            const nodes = [];
+            const edges = [];
+            const nodeMap = {};
+            const fraudCounts = {}; // Track fraud counts for each node
+            
+            // Add customer node
+            const fraudCount = parseInt("{{ graph_data.statistics.fraud_transactions }}");
+            nodes.push({
+                id: customerId,
+                label: `Customer ${customerId}`,
+                title: `Customer Account: ${customerId}`,
+                group: 'customer',
+                value: 40,
+                fraud_count: fraudCount
+            });
+            nodeMap[customerId] = true;
+            fraudCounts[customerId] = fraudCount;
+            
+            // Process ALL transactions to create nodes and edges
+            allTransactions.forEach(transaction => {
+                // Generate counterparty ID if needed
+                const counterpartyId = transaction.counterparty_account_number || `ACC_${transaction.transaction_id}`;
+                
+                // Track fraud counts for counterparty
+                if (!fraudCounts[counterpartyId]) {
+                    fraudCounts[counterpartyId] = 0;
+                }
+                
+                if (transaction.label_for_fraud == 1) {
+                    fraudCounts[counterpartyId]++;
+                }
+                
+                // Add counterparty node if not already added
+                if (!nodeMap[counterpartyId]) {
+                    const method = transaction.method_of_transaction;
+                    const group = method.toLowerCase().includes('rtgs') ? 'rtgs' : 
+                                 method.toLowerCase().includes('neft') ? 'neft' :
+                                 method.toLowerCase().includes('upi') ? 'upi' :
+                                 method.toLowerCase().includes('imps') ? 'imps' : 'direct';
+                    
+                    nodes.push({
+                        id: counterpartyId,
+                        label: counterpartyId,
+                        title: `${method} Transaction`,
+                        group: group,
+                        value: 20,
+                        fraud_count: 0 // Will be updated after processing all transactions
+                    });
+                    nodeMap[counterpartyId] = true;
+                }
+                
+                // Determine direction and create edge
+                const isOutgoing = transaction.transaction_amount < 0;
+                const amount = Math.abs(transaction.transaction_amount);
+                
+                edges.push({
+                    from: isOutgoing ? customerId : counterpartyId,
+                    to: isOutgoing ? counterpartyId : customerId,
+                    title: `Rs. ${amount.toFixed(2)} - ${transaction.method_of_transaction}`,
+                    width: 1 + Math.min(5, amount / 5000),
+                    color: { color: transaction.label_for_fraud == 1 ? '#f56565' : '#a0aec0' },
+                    arrows: 'to'
+                });
+            });
+            
+            // Update fraud counts for all nodes
+            nodes.forEach(node => {
+                if (node.id !== customerId) {
+                    node.fraud_count = fraudCounts[node.id] || 0;
+                }
+            });
+            
+            // Create the network
+            const container = document.getElementById('mynetwork');
+            
+            // Create dataset
+            const data = {
+                nodes: new vis.DataSet(nodes.map(node => ({
+                    id: node.id,
+                    label: node.label,
+                    title: `${node.title} (Fraud: ${node.fraud_count})`,
+                    value: node.value,
+                    color: getNodeColor(node),
+                    font: { size: 14 }
+                }))),
+                edges: new vis.DataSet(edges)
+            };
+            
+            // Network options
+            const options = {
+                nodes: {
+                    shape: 'dot',
+                    scaling: {
+                        min: 10,
+                        max: 30,
+                        label: {
+                            enabled: true,
+                            min: 14,
+                            max: 20
+                        }
+                    }
+                },
+                physics: {
+                    forceAtlas2Based: {
+                        gravitationalConstant: -100,
+                        centralGravity: 0.15,
+                        springLength: 150,
+                        springConstant: 0.05,
+                        avoidOverlap: 0.8
+                    },
+                    maxVelocity: 50,
+                    solver: 'forceAtlas2Based',
+                    timestep: 0.35,
+                    stabilization: {
+                        enabled: true,
+                        iterations: 1000
+                    }
+                },
+                interaction: {
+                    hover: true,
+                    navigationButtons: true,
+                    keyboard: {
+                        enabled: true
+                    }
+                }
+            };
+            
+            // Create network
+            const network = new vis.Network(container, data, options);
+            
+            // Update node and edge counters
+            document.getElementById('nodeCount').textContent = nodes.length;
+            document.getElementById('edgeCount').textContent = edges.length;
+            
+            // Store original data for filtering
+            const allNodes = new vis.DataSet(data.nodes.get());
+            const allEdges = new vis.DataSet(data.edges.get());
+            
+            // Set up filter buttons
+            const showAllBtn = document.getElementById('showAllBtn');
+            const showFraudBtn = document.getElementById('showFraudBtn');
+            const showGenuineBtn = document.getElementById('showGenuineBtn');
+            const highlightFraudBtn = document.getElementById('highlightFraudBtn');
+            const searchInput = document.getElementById('searchNode');
+            const searchBtn = document.getElementById('searchBtn');
+            
+            // Helper function to set active button
+            function setActiveButton(activeButton) {
+                [showAllBtn, showFraudBtn, showGenuineBtn, highlightFraudBtn].forEach(btn => {
+                    btn.classList.remove('bg-blue-500', 'text-white');
+                    btn.classList.add('bg-gray-200', 'text-gray-800');
+                });
+                activeButton.classList.remove('bg-gray-200', 'text-gray-800');
+                activeButton.classList.add('bg-blue-500', 'text-white');
+            }
+            
+            // Show all transactions
+            showAllBtn.addEventListener('click', function() {
+                setActiveButton(this);
+                data.nodes.clear();
+                data.edges.clear();
+                data.nodes.add(allNodes.get());
+                data.edges.add(allEdges.get());
+                document.getElementById('nodeCount').textContent = allNodes.length;
+                document.getElementById('edgeCount').textContent = allEdges.length;
+            });
+            
+            // Show only fraud transactions
+            showFraudBtn.addEventListener('click', function() {
+                setActiveButton(this);
+                
+                // Filter edges with fraud label
+                const fraudEdges = allEdges.get().filter(edge => edge.color.color === '#f56565');
+                
+                // Find nodes connected to fraud edges
+                const relevantNodeIds = new Set();
+                relevantNodeIds.add(customerId); // Always include customer node
+                
+                fraudEdges.forEach(edge => {
+                    relevantNodeIds.add(edge.from);
+                    relevantNodeIds.add(edge.to);
+                });
+                
+                const relevantNodes = allNodes.get().filter(node => relevantNodeIds.has(node.id));
+                
+                // Update the network
+                data.nodes.clear();
+                data.edges.clear();
+                data.nodes.add(relevantNodes);
+                data.edges.add(fraudEdges);
+                
+                // Update counts
+                document.getElementById('nodeCount').textContent = relevantNodes.length;
+                document.getElementById('edgeCount').textContent = fraudEdges.length;
+            });
+            
+            // Show only genuine transactions
+            showGenuineBtn.addEventListener('click', function() {
+                setActiveButton(this);
+                
+                // Filter edges with genuine label
+                const genuineEdges = allEdges.get().filter(edge => edge.color.color === '#a0aec0');
+                
+                // Find nodes connected to genuine edges
+                const relevantNodeIds = new Set();
+                relevantNodeIds.add(customerId); // Always include customer node
+                
+                genuineEdges.forEach(edge => {
+                    relevantNodeIds.add(edge.from);
+                    relevantNodeIds.add(edge.to);
+                });
+                
+                const relevantNodes = allNodes.get().filter(node => relevantNodeIds.has(node.id));
+                
+                // Update the network
+                data.nodes.clear();
+                data.edges.clear();
+                data.nodes.add(relevantNodes);
+                data.edges.add(genuineEdges);
+                
+                // Update counts
+                document.getElementById('nodeCount').textContent = relevantNodes.length;
+                document.getElementById('edgeCount').textContent = genuineEdges.length;
+            });
+            
+            // Highlight fraud transactions
+            highlightFraudBtn.addEventListener('click', function() {
+                setActiveButton(this);
+                
+                // Show all nodes and edges
+                data.nodes.clear();
+                data.edges.clear();
+                
+                // Find nodes connected to fraud edges
+                const fraudEdges = allEdges.get().filter(edge => edge.color.color === '#f56565');
+                const fraudNodeIds = new Set();
+                
+                fraudEdges.forEach(edge => {
+                    fraudNodeIds.add(edge.from);
+                    fraudNodeIds.add(edge.to);
+                });
+                
+                // Add all nodes but modify their appearance based on fraud connection
+                const highlightedNodes = allNodes.get().map(node => {
+                    const newNode = {...node};
+                    if (fraudNodeIds.has(node.id)) {
+                        // Highlight the node
+                        newNode.borderWidth = 3;
+                        newNode.borderColor = '#dc2626';
+                        newNode.shadow = {
+                            enabled: true,
+                            color: 'rgba(220, 38, 38, 0.5)',
+                            size: 10
+                        };
+                    } else {
+                        // Dim non-fraud nodes
+                        newNode.color = {
+                            ...newNode.color,
+                            opacity: 0.3
+                        };
+                        newNode.font = {
+                            ...newNode.font,
+                            color: '#9ca3af'
+                        };
+                    }
+                    return newNode;
+                });
+                
+                // Add all edges but modify their appearance
+                const highlightedEdges = allEdges.get().map(edge => {
+                    const newEdge = {...edge};
+                    if (edge.color.color !== '#f56565') {
+                        // Dim non-fraud edges
+                        newEdge.color = {color: '#e5e7eb', opacity: 0.3};
+                        newEdge.width = Math.max(1, edge.width / 2);
+                    } else {
+                        // Highlight fraud edges
+                        newEdge.width = edge.width * 1.5;
+                        newEdge.shadow = {
+                            enabled: true,
+                            color: 'rgba(220, 38, 38, 0.5)',
+                            size: 5
+                        };
+                    }
+                    return newEdge;
+                });
+                
+                // Update the network
+                data.nodes.add(highlightedNodes);
+                data.edges.add(highlightedEdges);
+                
+                // Update counts
+                document.getElementById('nodeCount').textContent = allNodes.length;
+                document.getElementById('edgeCount').textContent = allEdges.length;
+            });
+            
+            // Search functionality
+            searchBtn.addEventListener('click', performSearch);
+            searchInput.addEventListener('keyup', function(event) {
+                if (event.key === 'Enter') {
+                    performSearch();
+                }
+            });
+            
+            function performSearch() {
+                const searchTerm = searchInput.value.trim().toLowerCase();
+                if (!searchTerm) return;
+                
+                // Reset all buttons' active state
+                [showAllBtn, showFraudBtn, showGenuineBtn, highlightFraudBtn].forEach(btn => {
+                    btn.classList.remove('bg-blue-500', 'text-white');
+                    btn.classList.add('bg-gray-200', 'text-gray-800');
+                });
+                
+                // Find nodes matching the search term
+                const matchingNodes = allNodes.get().filter(node => 
+                    node.id.toString().toLowerCase().includes(searchTerm) || 
+                    node.label.toLowerCase().includes(searchTerm)
+                );
+                
+                if (matchingNodes.length === 0) {
+                    // Show notification if no matches found
+                    alert('No matching nodes found');
+                    return;
+                }
+                
+                // Get all edges connected to matching nodes
+                const nodeIds = new Set(matchingNodes.map(node => node.id));
+                const connectedEdges = allEdges.get().filter(edge => 
+                    nodeIds.has(edge.from) || nodeIds.has(edge.to)
+                );
+                
+                // Add the customer node always
+                if (!nodeIds.has(customerId)) {
+                    nodeIds.add(customerId);
+                    const customerNode = allNodes.get().find(node => node.id === customerId);
+                    if (customerNode) matchingNodes.push(customerNode);
+                }
+                
+                // Highlight matching nodes and their connections
+                const highlightedNodes = allNodes.get().map(node => {
+                    const newNode = {...node};
+                    if (nodeIds.has(node.id)) {
+                        // Matching node - highlight it
+                        if (node.id.toString().toLowerCase().includes(searchTerm)) {
+                            // Direct match - strongly highlight
+                            newNode.borderWidth = 3;
+                            newNode.borderColor = '#3b82f6'; // Blue
+                            newNode.shadow = {
+                                enabled: true,
+                                color: 'rgba(59, 130, 246, 0.5)',
+                                size: 10
+                            };
+                        } else {
+                            // Connected node - moderate highlight
+                            newNode.borderWidth = 2;
+                            newNode.borderColor = '#93c5fd'; // Light blue
+                        }
+                    } else {
+                        // Dim non-matching nodes
+                        newNode.color = {
+                            ...newNode.color,
+                            opacity: 0.2
+                        };
+                        newNode.font = {
+                            ...newNode.font,
+                            color: '#9ca3af'
+                        };
+                    }
+                    return newNode;
+                });
+                
+                // Highlight connected edges
+                const highlightedEdges = allEdges.get().map(edge => {
+                    const newEdge = {...edge};
+                    if (connectedEdges.some(e => e.id === edge.id)) {
+                        // Connected edge - highlight
+                        newEdge.width = edge.width * 1.5;
+                        newEdge.color = {
+                            color: edge.color.color,
+                            opacity: 1
+                        };
+                    } else {
+                        // Dim other edges
+                        newEdge.color = {color: '#e5e7eb', opacity: 0.2};
+                        newEdge.width = Math.max(0.5, edge.width / 2);
+                    }
+                    return newEdge;
+                });
+                
+                // Update the network
+                data.nodes.clear();
+                data.edges.clear();
+                data.nodes.add(highlightedNodes);
+                data.edges.add(highlightedEdges);
+                
+                // Focus on matching nodes
+                if (matchingNodes.length > 0) {
+                    const nodeIds = matchingNodes.map(node => node.id);
+                    network.fit({
+                        nodes: nodeIds,
+                        animation: {
+                            duration: 1000,
+                            easingFunction: 'easeInOutQuad'
+                        }
+                    });
+                }
+            }
+            
+            // Helper function to get node color based on group and fraud count
+            function getNodeColor(node) {
+                if (node.group === 'customer') {
+                    if (node.fraud_count >= 5) {
+                        return '#dc2626'; // Dark red for high fraud customer
+                    } else {
+                        return '#48bb78'; // Green for low fraud customer
+                    }
+                } else {
+                    // Base color based on transaction method
+                    let baseColor;
+                    if (node.group === 'rtgs') {
+                        baseColor = '#4299e1'; // Blue for RTGS
+                    } else if (node.group === 'neft') {
+                        baseColor = '#f6e05e'; // Yellow for NEFT
+                    } else if (node.group === 'upi') {
+                        baseColor = '#9f7aea'; // Purple for UPI
+                    } else if (node.group === 'imps') {
+                        baseColor = '#4fd1c5'; // Teal for IMPS
+                    } else if (node.group === 'direct') {
+                        baseColor = '#fc8181'; // Pink for Direct
+                    } else {
+                        baseColor = '#a0aec0'; // Gray default
+                    }
+                    
+                    // Adjust color based on fraud count
+                    if (node.fraud_count >= 5) {
+                        return '#dc2626'; // Dark red for high fraud
+                    } else if (node.fraud_count > 0) {
+                        return '#f87171'; // Light red for some fraud
+                    } else {
+                        return baseColor; // Base color for no fraud
+                    }
+                }
+            }
+        });
+
+        // Chat Interface Functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatForm = document.getElementById('chat-form');
+            const chatInput = document.getElementById('chat-input');
+            const chatMessages = document.getElementById('chat-messages');
+            const chatStatus = document.getElementById('chat-status');
+
+            chatForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const userMessage = chatInput.value.trim();
+                if (!userMessage) return;
+                
+                // Add user message to chat
+                appendMessage(userMessage, 'user');
+                chatInput.value = '';
+                
+                // Show thinking indicator
+                chatStatus.classList.remove('hidden');
+                
+                try {
+                    // Send request to backend
+                    const response = await fetch("{% url 'transaction_chat' %}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify({
+                            query: userMessage,
+                            customer_id: "{{ customer_id }}"
+                        })
+                    });
+                    
+                    const responseData = await response.json();
+                    
+                    if (!response.ok) {
+                        const errorMsg = responseData.error || `Error: Server responded with ${response.status}`;
+                        console.error('Server error:', errorMsg);
+                        appendMessage(`I'm sorry, there was a problem processing your request. ${errorMsg}`, 'assistant', true);
+                    } else if (responseData.error) {
+                        console.error('API error:', responseData.error);
+                        appendMessage(`I'm sorry, there was a problem: ${responseData.error}`, 'assistant', true);
+                    } else {
+                        // Add assistant response to chat
+                        appendMessage(responseData.response || "Sorry, I couldn't generate a response.", 'assistant');
+                    }
+                } catch (error) {
+                    console.error('Network error:', error);
+                    appendMessage('Sorry, there was a network error while processing your request. Please check your connection and try again.', 'assistant', true);
+                } finally {
+                    // Hide thinking indicator
+                    chatStatus.classList.add('hidden');
+                    
+                    // Scroll to bottom of chat
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+            });
+            
+            // Add a message to the chat window
+            function appendMessage(message, sender, isError = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = sender === 'user' ? 'flex justify-end' : 'flex justify-start';
+                
+                const messageBubble = document.createElement('div');
+                messageBubble.className = sender === 'user' 
+                    ? 'bg-blue-500 text-white rounded-lg py-2 px-3 max-w-3/4' 
+                    : `bg-gray-200 rounded-lg py-2 px-3 max-w-3/4 ${isError ? 'text-red-600' : 'text-gray-800'}`;
+                
+                // Check if the message contains markdown-style code blocks and format them
+                const formattedMessage = message.replace(/```([\s\S]*?)```/g, '<pre class="bg-gray-800 text-white p-2 rounded mt-1 mb-1 overflow-x-auto"><code>$1</code></pre>');
+                
+                messageBubble.innerHTML = `<p class="text-sm whitespace-pre-wrap">${formattedMessage}</p>`;
+                messageDiv.appendChild(messageBubble);
+                
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+            
+            // Helper function to get CSRF token
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+        });
+    </script>
+    {% endif %}
+
+    {% else %}
+    <div class="bg-white rounded-lg shadow p-6 text-center">
+        <svg class="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        <h3 class="text-lg font-medium text-gray-900 mb-1">No transactions found</h3>
+        <p class="text-gray-500">There are no transactions for customer account {{ customer_id }}.</p>
+    </div>
+    {% endif %}
+</body>
+</html>
