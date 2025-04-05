@@ -1,4 +1,4 @@
-# UBIShield Banking Application
+# FOMO Banking Application
 
 ## Transaction Network Visualization and Chat Interface
 
