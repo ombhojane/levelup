@@ -127,7 +127,7 @@ def compliance_dashboard(request):
                 
             # Format the amount for better display
             try:
-                transaction['formatted_amount'] = f"${float(transaction['transaction_amount']):,.2f}"
+                transaction['formatted_amount'] = f"₹{float(transaction['transaction_amount']):,.2f}"
             except:
                 transaction['formatted_amount'] = 'N/A'
         
