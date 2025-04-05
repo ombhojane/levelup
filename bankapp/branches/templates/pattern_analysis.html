@@ -5,13 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pattern Analysis</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body class="p-6">
-    <div class=" mx-auto mt-10 p-6 bg-white rounded-lg ">
+<body class="p-6 bg-gray-50">
+    <div class="max-w-5xl mx-auto mt-10 p-6 bg-white rounded-lg shadow-sm">
         <h1 class="text-2xl font-bold">Pattern Analysis</h1>
         <p class="text-gray-600">AI-powered transaction pattern analysis</p>
         
-        <div class="mt-4 p-4 border rounded-lg bg-gray-50">
+        <div class="mt-6 p-4 border rounded-lg bg-gray-50">
             <h2 class="text-lg font-semibold flex items-center gap-2">
                 <span>📊</span> Transaction Pattern Analysis
             </h2>
@@ -25,53 +26,137 @@
             <div id="input-section" class="mt-4">
                 <div class="mt-4">
                     <label class="text-sm font-medium">Customer ID</label>
-                    <input type="text" value="cust-123456" class="w-full p-2 border rounded-md text-sm bg-gray-100">
+                    <select id="customer-select" class="w-full p-2 border rounded-md text-sm bg-gray-100">
+                        <option value="37962">37962 - Priya Sharma</option>
+                        <option value="17384">17384 - Rajesh Gupta</option>
+                    </select>
                     <div class="mt-4">
                         <label class="text-sm font-medium">Time Period</label>
-                        <select class="w-full p-2 border rounded-md text-sm bg-gray-100">
-                            <option>Last 30 days</option>
-                            <option>Last 90 days</option>
-                            <option>Last 6 months</option>
-                            <option>Last 1 year</option>
+                        <select id="time-period" class="w-full p-2 border rounded-md text-sm bg-gray-100">
+                            <option value="30" selected>Last 30 days</option>
+                            <option value="90">Last 90 days</option>
+                            <option value="180">Last 6 months</option>
+                            <option value="365">Last 1 year</option>
                         </select>
                     </div>
                 </div>
                 
-                <p class="text-xs text-gray-500 mt-2">Enter a customer ID and select time period for pattern analysis.<br>The AI will analyze transaction patterns, frequency, and anomalies.</p>
+                <p class="text-xs text-gray-500 mt-2">Select a customer ID and time period for pattern analysis.<br>The AI will analyze transaction patterns, frequency, and anomalies.</p>
                 
-                <button id="analyze-btn" class="mt-4 bg-blue-500 text-white py-2 px-6 rounded-md">Analyze</button>
+                <button id="analyze-btn" class="mt-4 bg-blue-500 text-white py-2 px-6 rounded-md hover:bg-blue-600">Analyze</button>
             </div>
 
             <div id="results-section" class="mt-4 hidden">
-                <div class="bg-white p-4 rounded-lg border">
+                <!-- Customer details section -->
+                <div class="bg-white p-4 rounded-lg border mb-4">
+                    <h3 id="customer-name" class="text-lg font-semibold text-gray-800">Customer: Priya Sharma</h3>
+                    <p id="customer-since" class="text-sm text-gray-600">Customer since: Jan 2020</p>
+                    <p id="account-type" class="text-sm text-gray-600">Account type: Savings</p>
+                </div>
+                
+                <!-- Transaction summary -->
+                <div class="bg-white p-4 rounded-lg border mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">Transaction Summary (Last 30 Days)</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                        <div class="bg-blue-50 p-3 rounded-lg">
+                            <p class="text-sm font-medium text-blue-800">Total Transactions</p>
+                            <p id="total-transactions" class="text-2xl font-bold text-blue-900">27</p>
+                        </div>
+                        <div class="bg-green-50 p-3 rounded-lg">
+                            <p class="text-sm font-medium text-green-800">Total Inflow</p>
+                            <p id="total-inflow" class="text-2xl font-bold text-green-900">₹87,450</p>
+                        </div>
+                        <div class="bg-red-50 p-3 rounded-lg">
+                            <p class="text-sm font-medium text-red-800">Total Outflow</p>
+                            <p id="total-outflow" class="text-2xl font-bold text-red-900">₹65,200</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Charts -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div class="bg-white p-4 rounded-lg border">
+                        <h4 class="font-medium text-gray-800">Transaction Frequency</h4>
+                        <div class="h-60">
+                            <canvas id="frequency-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg border">
+                        <h4 class="font-medium text-gray-800">Transaction Categories</h4>
+                        <div class="h-60">
+                            <canvas id="category-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Pattern analysis -->
+                <div class="bg-white p-4 rounded-lg border mb-4">
                     <h3 class="text-lg font-semibold text-gray-800">Pattern Analysis Results</h3>
                     <div class="mt-4 space-y-4">
-                        <div class="bg-blue-50 p-4 rounded-lg">
+                        <div id="normal-patterns" class="bg-blue-50 p-4 rounded-lg">
                             <h4 class="font-medium text-blue-800">Transaction Patterns</h4>
                             <ul class="mt-2 space-y-2 text-sm text-blue-700">
                                 <li class="flex items-center">
-                                    <span class="mr-2">📈</span> Average transaction frequency: 3.2 per week
+                                    <span class="mr-2">📈</span> <span id="avg-frequency">Average transaction frequency: 6.5 per week</span>
                                 </li>
                                 <li class="flex items-center">
-                                    <span class="mr-2">💰</span> Typical transaction range: $50 - $500
+                                    <span class="mr-2">💰</span> <span id="typical-range">Typical transaction range: ₹1,000 - ₹8,500</span>
                                 </li>
                                 <li class="flex items-center">
-                                    <span class="mr-2">⚠️</span> 2 unusual patterns detected
+                                    <span class="mr-2">🏧</span> <span id="common-channels">Common channels: UPI (55%), Net Banking (25%), ATM (15%)</span>
+                                </li>
+                                <li class="flex items-center">
+                                    <span class="mr-2">🕒</span> <span id="common-times">Most active times: Evenings (6-9 PM), Weekends</span>
+                                </li>
+                                <li class="flex items-center">
+                                    <span class="mr-2">🔄</span> <span id="recurring">Recurring transactions: 3 identified</span>
                                 </li>
                             </ul>
                         </div>
-                        <div class="bg-yellow-50 p-4 rounded-lg">
+                        <div id="anomaly-patterns" class="bg-yellow-50 p-4 rounded-lg">
                             <h4 class="font-medium text-yellow-800">Anomalies Detected</h4>
-                            <ul class="mt-2 space-y-2 text-sm text-yellow-700">
+                            <ul id="anomalies-list" class="mt-2 space-y-2 text-sm text-yellow-700">
                                 <li class="flex items-center">
-                                    <span class="mr-2">⚠️</span> Sudden increase in transaction frequency
+                                    <span class="mr-2">⚠️</span> Unusual transaction of ₹15,000 on May 12, 2023
                                 </li>
                                 <li class="flex items-center">
-                                    <span class="mr-2">⚠️</span> Unusual location pattern detected
+                                    <span class="mr-2">⚠️</span> Transaction from unusual location (Kolkata) - normally transacts in Mumbai
+                                </li>
+                                <li class="flex items-center">
+                                    <span class="mr-2">⚠️</span> Three consecutive international transactions (not observed in previous history)
                                 </li>
                             </ul>
+                        </div>
+                        <div id="risk-assessment" class="bg-orange-50 p-4 rounded-lg">
+                            <h4 class="font-medium text-orange-800">Risk Assessment</h4>
+                            <div class="flex items-center mt-2">
+                                <div class="w-full bg-gray-200 rounded-full h-5">
+                                    <div id="risk-meter" class="bg-orange-500 h-5 rounded-full" style="width: 35%"></div>
+                                </div>
+                                <span id="risk-score" class="ml-3 text-orange-700 font-medium">35%</span>
+                            </div>
+                            <p id="risk-explanation" class="mt-2 text-sm text-orange-700">
+                                Moderate risk due to unusual location transactions and first-time international purchases.
+                                Recommended action: Monitor account for next 48 hours.
+                            </p>
                         </div>
                     </div>
+                </div>
+                
+                <!-- Recommendations -->
+                <div class="bg-white p-4 rounded-lg border">
+                    <h3 class="text-lg font-semibold text-gray-800">Recommendations</h3>
+                    <ul id="recommendations" class="mt-2 space-y-2 text-sm text-gray-700">
+                        <li class="flex items-center p-2 hover:bg-gray-50 rounded">
+                            <span class="mr-2 text-blue-500">🔍</span> Contact customer to verify recent international transactions
+                        </li>
+                        <li class="flex items-center p-2 hover:bg-gray-50 rounded">
+                            <span class="mr-2 text-blue-500">🔔</span> Set up additional verification for transactions above ₹10,000
+                        </li>
+                        <li class="flex items-center p-2 hover:bg-gray-50 rounded">
+                            <span class="mr-2 text-blue-500">📱</span> Suggest enabling location-based transaction alerts
+                        </li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -80,34 +165,241 @@
     </div>
 
 <script>
+    // Customer data (simulated)
+    const customerData = {
+        "37962": {
+            name: "Priya Sharma",
+            since: "Jan 2020",
+            accountType: "Savings + Salary Account",
+            totalTransactions: 27,
+            totalInflow: "₹87,450",
+            totalOutflow: "₹65,200",
+            avgFrequency: "6.5 per week",
+            typicalRange: "₹1,000 - ₹8,500",
+            commonChannels: "UPI (55%), Net Banking (25%), ATM (15%)",
+            commonTimes: "Evenings (6-9 PM), Weekends",
+            recurring: "3 identified (Rent, Utility, Subscription)",
+            riskScore: 35,
+            frequencyData: [3, 5, 4, 8, 7],
+            categoryData: [32, 25, 15, 12, 10, 6],
+            categoryLabels: ["Shopping", "Food", "Entertainment", "Travel", "Bills", "Other"],
+            anomalies: [
+                "Unusual transaction of ₹15,000 on May 12, 2023",
+                "Transaction from unusual location (Kolkata) - normally transacts in Mumbai",
+                "Three consecutive international transactions (not observed in previous history)"
+            ],
+            riskExplanation: "Moderate risk due to unusual location transactions and first-time international purchases. Recommended action: Monitor account for next 48 hours.",
+            recommendations: [
+                "Contact customer to verify recent international transactions",
+                "Set up additional verification for transactions above ₹10,000",
+                "Suggest enabling location-based transaction alerts"
+            ]
+        },
+        "17384": {
+            name: "Rajesh Gupta",
+            since: "Mar 2018",
+            accountType: "Premium Banking",
+            totalTransactions: 43,
+            totalInflow: "₹1,24,600",
+            totalOutflow: "₹98,750",
+            avgFrequency: "10.2 per week",
+            typicalRange: "₹2,000 - ₹12,000",
+            commonChannels: "Credit Card (45%), Net Banking (35%), UPI (15%)",
+            commonTimes: "Mornings (9-11 AM), Weekdays",
+            recurring: "5 identified (Rent, Utilities, Insurance, Investments, Subscriptions)",
+            riskScore: 65,
+            frequencyData: [12, 8, 9, 7, 7],
+            categoryData: [28, 22, 18, 12, 10, 10],
+            categoryLabels: ["Shopping", "Dining", "Travel", "Investment", "Bills", "Other"],
+            anomalies: [
+                "Sudden frequency increase: 18 transactions in 3 days (May 8-10)",
+                "Unusual high-value transaction of ₹35,000 to unknown merchant",
+                "First-time cryptocurrency exchange transaction",
+                "Multiple failed login attempts from foreign IP address",
+                "6 small value transactions (₹500-₹1000) to the same recipient within 24 hours"
+            ],
+            riskExplanation: "High risk due to sudden transaction frequency increase, unusual high-value transaction, and cryptocurrency activity. Recommended action: Contact customer immediately for verification.",
+            recommendations: [
+                "Initiate fraud review for recent high value transaction",
+                "Contact customer to verify cryptocurrency transaction intent",
+                "Temporarily limit transaction amounts until verification",
+                "Suggest enabling two-factor authentication for all transactions",
+                "Review recurring payment authorizations with customer"
+            ]
+        }
+    };
+
     document.addEventListener('DOMContentLoaded', function() {
         const inputTab = document.getElementById('input-tab');
         const resultsTab = document.getElementById('results-tab');
         const inputSection = document.getElementById('input-section');
         const resultsSection = document.getElementById('results-section');
         const analyzeBtn = document.getElementById('analyze-btn');
+        const customerSelect = document.getElementById('customer-select');
+        const timePeriod = document.getElementById('time-period');
+        
+        let frequencyChart, categoryChart;
 
         inputTab.addEventListener('click', () => {
-            inputTab.classList.add('border-b-2', 'border-blue-500', 'font-semibold');
-            inputTab.classList.remove('text-gray-400');
-            resultsTab.classList.remove('border-b-2', 'border-blue-500', 'font-semibold');
-            resultsTab.classList.add('text-gray-400');
+            inputTab.classList.add('border-b-2', 'border-blue-500', 'font-medium');
+            inputTab.classList.remove('text-gray-500');
+            resultsTab.classList.remove('border-b-2', 'border-blue-500', 'font-medium');
+            resultsTab.classList.add('text-gray-500');
             inputSection.classList.remove('hidden');
             resultsSection.classList.add('hidden');
         });
 
         resultsTab.addEventListener('click', () => {
-            resultsTab.classList.add('border-b-2', 'border-blue-500', 'font-semibold');
-            resultsTab.classList.remove('text-gray-400');
-            inputTab.classList.remove('border-b-2', 'border-blue-500', 'font-semibold');
-            inputTab.classList.add('text-gray-400');
+            resultsTab.classList.add('border-b-2', 'border-blue-500', 'font-medium');
+            resultsTab.classList.remove('text-gray-500');
+            inputTab.classList.remove('border-b-2', 'border-blue-500', 'font-medium');
+            inputTab.classList.add('text-gray-500');
             resultsSection.classList.remove('hidden');
             inputSection.classList.add('hidden');
         });
 
+        function updateCharts(customerId) {
+            const data = customerData[customerId];
+            
+            // Destroy existing charts if they exist
+            if (frequencyChart) frequencyChart.destroy();
+            if (categoryChart) categoryChart.destroy();
+            
+            // Create frequency chart
+            const frequencyCtx = document.getElementById('frequency-chart').getContext('2d');
+            frequencyChart = new Chart(frequencyCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'],
+                    datasets: [{
+                        label: 'Transactions per Week',
+                        data: data.frequencyData,
+                        backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+            
+            // Create category chart
+            const categoryCtx = document.getElementById('category-chart').getContext('2d');
+            categoryChart = new Chart(categoryCtx, {
+                type: 'pie',
+                data: {
+                    labels: data.categoryLabels,
+                    datasets: [{
+                        data: data.categoryData,
+                        backgroundColor: [
+                            'rgba(59, 130, 246, 0.6)',
+                            'rgba(16, 185, 129, 0.6)',
+                            'rgba(245, 158, 11, 0.6)',
+                            'rgba(239, 68, 68, 0.6)',
+                            'rgba(139, 92, 246, 0.6)',
+                            'rgba(107, 114, 128, 0.6)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right'
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateCustomerData(customerId) {
+            const data = customerData[customerId];
+            
+            // Update customer details
+            document.getElementById('customer-name').textContent = `Customer: ${data.name}`;
+            document.getElementById('customer-since').textContent = `Customer since: ${data.since}`;
+            document.getElementById('account-type').textContent = `Account type: ${data.accountType}`;
+            
+            // Update transaction summary
+            document.getElementById('total-transactions').textContent = data.totalTransactions;
+            document.getElementById('total-inflow').textContent = data.totalInflow;
+            document.getElementById('total-outflow').textContent = data.totalOutflow;
+            
+            // Update transaction patterns
+            document.getElementById('avg-frequency').textContent = `Average transaction frequency: ${data.avgFrequency}`;
+            document.getElementById('typical-range').textContent = `Typical transaction range: ${data.typicalRange}`;
+            document.getElementById('common-channels').textContent = `Common channels: ${data.commonChannels}`;
+            document.getElementById('common-times').textContent = `Most active times: ${data.commonTimes}`;
+            document.getElementById('recurring').textContent = `Recurring transactions: ${data.recurring}`;
+            
+            // Update anomalies
+            const anomaliesList = document.getElementById('anomalies-list');
+            anomaliesList.innerHTML = '';
+            data.anomalies.forEach(anomaly => {
+                const li = document.createElement('li');
+                li.className = 'flex items-center';
+                li.innerHTML = `<span class="mr-2">⚠️</span> ${anomaly}`;
+                anomaliesList.appendChild(li);
+            });
+            
+            // Update risk assessment
+            document.getElementById('risk-meter').style.width = `${data.riskScore}%`;
+            document.getElementById('risk-score').textContent = `${data.riskScore}%`;
+            document.getElementById('risk-explanation').textContent = data.riskExplanation;
+            
+            // Update recommendations
+            const recommendationsList = document.getElementById('recommendations');
+            recommendationsList.innerHTML = '';
+            data.recommendations.forEach(recommendation => {
+                const li = document.createElement('li');
+                li.className = 'flex items-center p-2 hover:bg-gray-50 rounded';
+                li.innerHTML = `<span class="mr-2 text-blue-500">🔍</span> ${recommendation}`;
+                recommendationsList.appendChild(li);
+            });
+            
+            // Update risk color based on score
+            const riskMeter = document.getElementById('risk-meter');
+            if (data.riskScore < 30) {
+                riskMeter.className = 'bg-green-500 h-5 rounded-full';
+                document.getElementById('risk-score').className = 'ml-3 text-green-700 font-medium';
+            } else if (data.riskScore < 60) {
+                riskMeter.className = 'bg-orange-500 h-5 rounded-full';
+                document.getElementById('risk-score').className = 'ml-3 text-orange-700 font-medium';
+            } else {
+                riskMeter.className = 'bg-red-500 h-5 rounded-full';
+                document.getElementById('risk-score').className = 'ml-3 text-red-700 font-medium';
+            }
+            
+            // Update charts
+            updateCharts(customerId);
+        }
+
         analyzeBtn.addEventListener('click', () => {
-            resultsTab.click();
+            const customerId = customerSelect.value;
+            
+            // Simulate loading time
+            analyzeBtn.textContent = 'Analyzing...';
+            analyzeBtn.disabled = true;
+            
+            setTimeout(() => {
+                updateCustomerData(customerId);
+                resultsTab.click();
+                analyzeBtn.textContent = 'Analyze';
+                analyzeBtn.disabled = false;
+            }, 1000);
         });
+
+        // Initialize with the first customer
+        customerSelect.value = "37962";
     });
 </script>
 </body>
