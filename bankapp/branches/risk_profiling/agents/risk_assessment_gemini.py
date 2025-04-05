@@ -7,7 +7,7 @@ class GeminiRiskAssessmentAgent:
     def __init__(self):
         """Initialize the risk assessment agent with Gemini API."""
         # Use Google API key from environment
-        api_key = "AIzaSyApXdK1m5FgJOJwB7Ea_26iT8zN_3HVhaE"
+        api_key = os.environ.get("GOOGLE_API_KEY")
         try:
             self.client = genai.Client(api_key=api_key)
             self.model = "gemini-1.5-pro"
