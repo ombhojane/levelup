@@ -7,6 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -124,6 +125,30 @@
             margin-right: 0;
             font-style: italic;
         }
+        /* Canvas Info Box */
+        .canvas-info-box {
+            background-color: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-top: 1rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        /* Placeholder Message */
+        .placeholder-message {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #94a3b8;
+            height: 100%;
+            padding: 2rem;
+        }
+        .placeholder-message svg {
+            margin-bottom: 1rem;
+            color: #cbd5e1;
+        }
     </style>
 </head>
 <body class="font-poppins">
@@ -141,7 +166,7 @@
             <!-- Chat area -->
             <div id="chatMessages" class="flex-1 flex flex-col p-6 overflow-y-auto">
                 <div class="bot-message chat-message">
-                    Hi there! I'm your bank's fraud detection assistant powered by Gemini AI. How can I help you today?
+                    Hi there! I'm your bank's fraud detection assistant powered by Gemini AI. I can analyze your transaction data or answer questions about fraud prevention. How can I help you today?
                 </div>
                 
                 <!-- Messages will be dynamically added here -->
@@ -156,10 +181,10 @@
                     What are common indicators of fraud?
                 </button>
                 <button class="starter-prompt bg-white border border-gray-300 px-5 py-2.5 text-sm rounded-full hover:bg-gray-100 transition-colors duration-300">
-                    How to protect my account from unauthorized access?
+                    Analyze my recent transaction patterns
                 </button>
                 <button class="starter-prompt bg-white border border-gray-300 px-5 py-2.5 text-sm rounded-full hover:bg-gray-100 transition-colors duration-300">
-                    What should I do if I suspect transaction fraud?
+                    Show me any suspicious activity in my account
                 </button>
             </div>
 
@@ -182,7 +207,7 @@
         <!-- Canvas Section -->
         <div id="canvasSection" class="flex-1 bg-white flex flex-col">
             <div class="flex justify-between items-center p-4 border-b border-gray-200">
-                <h2 class="text-lg font-semibold">Canvas</h2>
+                <h2 class="text-lg font-semibold">Transaction Analysis</h2>
                 <div class="flex gap-2">
                     <button id="expandCanvas" class="text-gray-600 hover:text-primary-blue">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -197,12 +222,23 @@
                 </div>
             </div>
             <div class="flex-1 p-4 overflow-auto">
-                <canvas id="visualizationCanvas" class="w-full h-full border border-gray-200 rounded"></canvas>
-            </div>
-            <div class="p-4 border-t border-gray-200">
-                <div class="flex gap-2">
-                    <button class="bg-primary-blue text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors">Save</button>
-                    <button class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition-colors">Reset</button>
+                <!-- Placeholder message when no visualization -->
+                <div id="placeholderMessage" class="placeholder-message">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                    </svg>
+                    <h3 class="text-lg font-medium">No Data Visualization Yet</h3>
+                    <p class="mt-2">Ask about your transaction data to see analysis results here.</p>
+                    <p class="mt-1 text-sm">Try: "Analyze my recent transactions" or "Show me spending patterns"</p>
+                </div>
+                
+                <!-- Visualization canvas -->
+                <div id="visualizationContent" class="hidden">
+                    <canvas id="visualizationCanvas" class="w-full border border-gray-200 rounded"></canvas>
+                    <div id="summaryBox" class="canvas-info-box mt-4">
+                        <h3 class="font-semibold mb-2">Analysis Summary</h3>
+                        <div id="transactionSummary"><!-- Transaction summary will be inserted here --></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -218,9 +254,11 @@
             const chatInput = document.getElementById('chatInput');
             const chatMessages = document.getElementById('chatMessages');
             const starterPrompts = document.querySelectorAll('.starter-prompt');
-            
-            // Default customer ID - in a real app, this would come from user authentication
-            const customerId = '20917'; 
+            const visualizationCanvas = document.getElementById('visualizationCanvas');
+            const visualizationContent = document.getElementById('visualizationContent');
+            const placeholderMessage = document.getElementById('placeholderMessage');
+            const summaryBox = document.getElementById('summaryBox');
+            const transactionSummary = document.getElementById('transactionSummary');
             
             // Initialize chat
             let isResizing = false;
@@ -263,8 +301,7 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        query: message,
-                        customer_id: customerId
+                        query: message
                     })
                 })
                 .then(response => response.json())
@@ -276,6 +313,9 @@
                     if (data.response) {
                         // Use HTML response if available, otherwise use plain text
                         addMessageToChat(data.response, 'bot', data.html_response);
+                        
+                        // Handle transaction visualization if applicable
+                        handleTransactionVisualization(data);
                     } else if (data.error) {
                         addMessageToChat('Error: ' + data.error, 'bot');
                     }
@@ -285,6 +325,76 @@
                     chatMessages.removeChild(typingIndicator);
                     addMessageToChat('Sorry, I encountered an error. Please try again.', 'bot');
                 });
+            }
+            
+            // Handle transaction visualization
+            function handleTransactionVisualization(data) {
+                if (data.is_transaction_query && data.canvas_data && data.canvas_data.visualization) {
+                    // Show visualization content and hide placeholder
+                    visualizationContent.classList.remove('hidden');
+                    placeholderMessage.classList.add('hidden');
+                    
+                    // Add transaction summary
+                    if (data.canvas_data.summary) {
+                        transactionSummary.textContent = data.canvas_data.summary;
+                    }
+                    
+                    // Display visualization
+                    displayVisualization(data.canvas_data.visualization);
+                    
+                    // Expand canvas section if it's collapsed
+                    if (chatSection.style.width === '80%') {
+                        chatSection.style.width = '60%';
+                        updateResizeHandlePosition();
+                    }
+                } else {
+                    // Hide visualization and show placeholder for non-transaction queries
+                    visualizationContent.classList.add('hidden');
+                    placeholderMessage.classList.remove('hidden');
+                }
+            }
+            
+            // Display visualization from base64 image
+            function displayVisualization(base64Data) {
+                const img = new Image();
+                img.onload = function() {
+                    // Set canvas dimensions to maintain image aspect ratio
+                    const canvas = visualizationCanvas;
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Clear previous content
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Calculate dimensions to fit in container while maintaining aspect ratio
+                    const containerWidth = canvas.parentElement.clientWidth;
+                    const containerHeight = 400; // Fixed height for visualization
+                    
+                    canvas.width = containerWidth;
+                    canvas.height = containerHeight;
+                    
+                    // Calculate scaling to maintain aspect ratio
+                    const imgRatio = img.width / img.height;
+                    let drawWidth, drawHeight, offsetX, offsetY;
+                    
+                    if (containerWidth / containerHeight > imgRatio) {
+                        // Container is wider than image (relative to height)
+                        drawHeight = containerHeight;
+                        drawWidth = drawHeight * imgRatio;
+                        offsetX = (containerWidth - drawWidth) / 2;
+                        offsetY = 0;
+                    } else {
+                        // Container is taller than image (relative to width)
+                        drawWidth = containerWidth;
+                        drawHeight = drawWidth / imgRatio;
+                        offsetX = 0;
+                        offsetY = (containerHeight - drawHeight) / 2;
+                    }
+                    
+                    // Draw image centered in canvas
+                    ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+                };
+                
+                img.src = `data:image/png;base64,${base64Data}`;
             }
             
             // Add message to chat
@@ -356,107 +466,6 @@
             
             // Handle window resize
             window.addEventListener('resize', updateResizeHandlePosition);
-            
-            // Initialize canvas for visualization
-            const vizCanvas = document.getElementById('visualizationCanvas');
-            const ctx = vizCanvas.getContext('2d');
-            
-            // Set canvas dimensions to match its display size
-            function resizeCanvas() {
-                const canvas = document.getElementById('visualizationCanvas');
-                canvas.width = canvas.clientWidth;
-                canvas.height = canvas.clientHeight;
-                
-                // Redraw canvas content after resize
-                drawSampleVisualization();
-            }
-            
-            // Sample visualization - just a placeholder
-            function drawSampleVisualization() {
-                if (!ctx) return;
-                
-                const canvas = document.getElementById('visualizationCanvas');
-                const width = canvas.width;
-                const height = canvas.height;
-                
-                ctx.clearRect(0, 0, width, height);
-                
-                // Draw a simple chart background
-                ctx.fillStyle = '#f8fafc';
-                ctx.fillRect(0, 0, width, height);
-                
-                // Draw grid lines
-                ctx.strokeStyle = '#e2e8f0';
-                ctx.lineWidth = 1;
-                
-                // Horizontal grid lines
-                for (let i = 0; i < height; i += 30) {
-                    ctx.beginPath();
-                    ctx.moveTo(0, i);
-                    ctx.lineTo(width, i);
-                    ctx.stroke();
-                }
-                
-                // Vertical grid lines
-                for (let i = 0; i < width; i += 30) {
-                    ctx.beginPath();
-                    ctx.moveTo(i, 0);
-                    ctx.lineTo(i, height);
-                    ctx.stroke();
-                }
-                
-                // Sample data - mock financial chart
-                const data = [];
-                for (let i = 0; i < 20; i++) {
-                    data.push(Math.random() * 100 + 50);
-                }
-                
-                // Draw line chart
-                ctx.strokeStyle = '#0066ff';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                
-                const step = width / (data.length - 1);
-                for (let i = 0; i < data.length; i++) {
-                    const x = i * step;
-                    const y = height - (data[i] / 150) * height;
-                    
-                    if (i === 0) {
-                        ctx.moveTo(x, y);
-                    } else {
-                        ctx.lineTo(x, y);
-                    }
-                }
-                
-                ctx.stroke();
-                
-                // Add points
-                ctx.fillStyle = '#0066ff';
-                for (let i = 0; i < data.length; i++) {
-                    const x = i * step;
-                    const y = height - (data[i] / 150) * height;
-                    
-                    ctx.beginPath();
-                    ctx.arc(x, y, 4, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
-            
-            // Resize and draw canvas on load
-            resizeCanvas();
-            
-            // Resize canvas when window is resized or resizing happens
-            window.addEventListener('resize', function() {
-                updateResizeHandlePosition();
-                resizeCanvas();
-            });
-            
-            // Redraw canvas when resizing ends
-            document.addEventListener('mouseup', function() {
-                if (isResizing) {
-                    resizeCanvas();
-                }
-            });
         });
     </script>
 </body>

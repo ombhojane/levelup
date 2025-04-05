@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.db import connection  # Connect to MySQL RDS
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
@@ -18,6 +18,7 @@ from .risk_profiling.agents.risk_assessment_gemini import GeminiRiskAssessmentAg
 import markdown
 import bleach
 from django.utils.safestring import mark_safe
+from django.conf import settings
 
 # Import risk profiling modules
 try:
@@ -281,53 +282,87 @@ def compliance_dashboard(request):
     
 @csrf_exempt
 def chat_bot(request):
+    """
+    Render the chatbot page and handle API requests for the chat.
+    """
+    customer_id = request.session.get('customer_id', '20917')  # Default to a test customer ID
+    
     if request.method == 'POST':
         try:
-            # Parse request data
+            # Get user query from POST data
             data = json.loads(request.body)
-            query = data.get('query')
-            customer_id = data.get('customer_id', '20917')  # Default customer ID
+            user_query = data.get('query', '')
             
-            if not query:
-                return JsonResponse({'error': 'Query is required'}, status=400)
+            # Initialize the transaction chat assistant
+            chat_assistant = TransactionChatAssistant()
             
-            # Initialize chat assistant and generate response
+            # Define and load CSV file for transaction data
             try:
-                chat_assistant = TransactionChatAssistant()
-                response_text = chat_assistant.generate_response(query, [], customer_id)
+                csv_file_path = os.path.join(settings.BASE_DIR, 'branches', 'data_sets', 'transaction_data.csv')
                 
-                # Process Markdown in the response
-                # Convert Markdown to HTML
-                html_response = markdown.markdown(response_text)
-                
-                # Sanitize HTML to prevent XSS attacks
-                allowed_tags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'em', 
-                               'ul', 'ol', 'li', 'code', 'pre', 'blockquote', 'a', 'br']
-                allowed_attrs = {'a': ['href', 'title']}
-                cleaned_html = bleach.clean(
-                    html_response, 
-                    tags=allowed_tags, 
-                    attributes=allowed_attrs, 
-                    strip=True
-                )
-                
-                return JsonResponse({
-                    'response': response_text,
-                    'html_response': cleaned_html
-                })
+                if os.path.exists(csv_file_path):
+                    df = pd.read_csv(csv_file_path)
+                    
+                    # Filter by customer ID if available
+                    if customer_id != 'Unknown':
+                        customer_id_int = int(customer_id)
+                        df = df[df['customer_id'] == customer_id_int]
+                    
+                    # Convert to list of dictionaries
+                    transaction_data = df.to_dict('records')
+                else:
+                    print(f"Transaction data file not found: {csv_file_path}")
+                    transaction_data = []
             except Exception as e:
-                print(f"Chat assistant error: {str(e)}")
+                print(f"Error loading transaction data: {e}")
+                transaction_data = []
+            
+            # Generate response - wrap this in try-except to handle any API errors
+            try:
+                response_data = chat_assistant.generate_response(user_query, transaction_data, customer_id)
+            except Exception as api_error:
+                print(f"Error in chat assistant API: {api_error}")
+                # Return a basic error response
                 return JsonResponse({
-                    'response': f"I encountered an error while processing your query. Please try again later. (Error: {str(e)})"
+                    'response': f"I apologize, but I encountered an error processing your request. Please try again.",
+                    'html_response': f"<p>I apologize, but I encountered an error processing your request. Please try again.</p>",
+                    'is_transaction_query': False,
+                    'canvas_data': None
                 })
-        
-        except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON in request'}, status=400)
+            
+            # Extract the different components of the response
+            text_response = response_data.get('response', '')
+            html_response = response_data.get('html_response', '')
+            is_transaction_query = response_data.get('is_transaction_query', False)
+            canvas_data = response_data.get('canvas_data', None)
+            
+            # Sanitize and convert Markdown to HTML if html_response is plain text
+            if html_response == text_response:
+                html_content = markdown.markdown(text_response)
+                allowed_tags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'strong', 'em', 'a', 'code', 'pre', 'blockquote']
+                allowed_attributes = {
+                    'a': ['href', 'title']
+                }
+                clean_html = bleach.clean(html_content, tags=allowed_tags, attributes=allowed_attributes)
+                html_response = clean_html
+            
+            return JsonResponse({
+                'response': text_response,
+                'html_response': html_response,
+                'is_transaction_query': is_transaction_query,
+                'canvas_data': canvas_data
+            })
+            
         except Exception as e:
-            print(f"Unexpected error in chat_bot: {str(e)}")
-            return JsonResponse({'error': f'Error processing request: {str(e)}'}, status=500)
+            print(f"Unexpected error in chat_bot view: {str(e)}")
+            return JsonResponse({
+                'response': f"Sorry, I encountered an error: {str(e)}",
+                'html_response': f"<p>Sorry, I encountered an error: {str(e)}</p>",
+                'is_transaction_query': False,
+                'canvas_data': None
+            })
     else:
-        # GET request - render template
+        # Render the chatbot template for GET requests
         return render(request, 'chatbot.html')
 
 

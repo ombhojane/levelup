@@ -1,6 +1,11 @@
 import os
 import json
 import random
+import re
+import pandas as pd
+import io
+import base64
+import matplotlib.pyplot as plt
 from google import genai
 from google.genai import types
 
@@ -47,6 +52,80 @@ class TransactionChatAssistant:
         except Exception as e:
             print(f"Error initializing Gemini client: {e}")
     
+    def _classify_query(self, query):
+        """
+        Determine if the query is transaction-related.
+        
+        Args:
+            query (str): The user's query
+            
+        Returns:
+            str: 'TRANSACTIONS' or 'NO_TRANSACTIONS'
+        """
+        if not self.api_available:
+            # Default to NO_TRANSACTIONS for simplicity
+            return 'NO_TRANSACTIONS'
+        
+        # Keywords indicating transaction-related queries
+        transaction_keywords = [
+            'transaction', 'transactions', 'spending', 'purchase', 'purchases', 'payment', 'payments',
+            'deposit', 'withdraw', 'transfer', 'expense', 'expenses', 'income', 'balance', 'spent',
+            'received', 'paid', 'money flow', 'account activity', 'recent activity', 'show me', 'analyze',
+            'analysis', 'chart', 'graph', 'plot', 'visualization', 'report', 'summary', 'statistics',
+            'trend', 'pattern', 'compare', 'filter', 'categorize', 'group', 'total'
+        ]
+        
+        # Check if any transaction keyword is in the query
+        query_lower = query.lower()
+        
+        # Simple rule-based classification
+        for keyword in transaction_keywords:
+            if keyword in query_lower:
+                return 'TRANSACTIONS'
+        
+        try:
+            # Use Gemini for more sophisticated classification
+            prompt = f"""Given the user query below, classify it as either 'TRANSACTIONS' or 'NO_TRANSACTIONS'.
+Choose 'TRANSACTIONS' if the user is asking for data analysis, visualization, or specific information about their transaction history.
+Choose 'NO_TRANSACTIONS' if the user is asking general questions about fraud, security, or banking that don't require analysis of their specific transaction data.
+
+USER QUERY: {query}
+
+RESPOND WITH ONLY ONE WORD: 'TRANSACTIONS' OR 'NO_TRANSACTIONS'."""
+            
+            contents = [
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=prompt)],
+                ),
+            ]
+            
+            generate_content_config = types.GenerateContentConfig(
+                temperature=0.0,  # Using lowest temperature for deterministic results
+                max_output_tokens=10,
+                response_mime_type="text/plain",
+            )
+            
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=contents,
+                config=generate_content_config,
+            )
+            
+            result = response.text.strip().upper()
+            
+            # Ensure valid response
+            if result not in ['TRANSACTIONS', 'NO_TRANSACTIONS']:
+                # Default to NO_TRANSACTIONS for invalid responses
+                return 'NO_TRANSACTIONS'
+                
+            return result
+            
+        except Exception as e:
+            print(f"Error in query classification: {e}")
+            # Default to NO_TRANSACTIONS on error
+            return 'NO_TRANSACTIONS'
+
     def generate_response(self, query, transactions_data, customer_id):
         """
         Generate a response to a query about transaction data.
@@ -57,68 +136,474 @@ class TransactionChatAssistant:
             customer_id (str): The ID of the customer
             
         Returns:
-            str: The assistant's response
+            dict: Response containing text, HTML, and visualization data
         """
         # If API is not available, use fallback response
         if not self.api_available:
-            return self._generate_fallback_response(query, transactions_data, customer_id)
+            fallback_response = self._generate_fallback_response(query, transactions_data, customer_id)
+            return {
+                'response': fallback_response,
+                'html_response': fallback_response,
+                'is_transaction_query': False,
+                'canvas_data': None
+            }
+        
+        # Determine if this is a transaction-related query
+        query_type = self._classify_query(query)
+        is_transaction_query = (query_type == 'TRANSACTIONS')
+        
+        # Return full response with visualization if transaction data is requested
+        if is_transaction_query and transactions_data:
+            return self._generate_transaction_analysis(query, transactions_data, customer_id)
+        elif is_transaction_query and not transactions_data:
+            # Handle the case where transaction data is requested but not available
+            response = "I'd like to analyze your transaction data, but it seems I don't have access to it at the moment. Please try again later or contact customer support if this issue persists."
+            return {
+                'response': response,
+                'html_response': response,
+                'is_transaction_query': True,
+                'canvas_data': None
+            }
+        else:
+            # Non-transaction query
+            direct_response = self._generate_direct_response(query)
+            return {
+                'response': direct_response,
+                'html_response': direct_response,
+                'is_transaction_query': False,
+                'canvas_data': None
+            }
+    
+    def _generate_transaction_analysis(self, query, transactions_data, customer_id):
+        """
+        Generate code and analysis for transaction-related queries.
+        
+        Args:
+            query (str): The user's query
+            transactions_data (list): List of transaction dictionaries
+            customer_id (str): The ID of the customer
             
+        Returns:
+            dict: Response with text, HTML, and visualization data
+        """
         try:
-            # If transaction data is empty or not provided, use direct query mode
-            if not transactions_data:
-                return self._generate_direct_response(query)
+            # Create dataframe from transactions
+            df = pd.DataFrame(transactions_data)
             
-            # Create prompt context with transaction data
-            transactions_summary = self._create_transactions_summary(transactions_data)
-            
-            prompt = f"""You are a financial transaction assistant helping a customer analyze their transaction data.
+            # Generate Python code to analyze the data
+            code_prompt = f"""You are an expert Python developer specializing in financial data analysis with pandas and matplotlib.
 
-CUSTOMER ID: {customer_id}
-
-TRANSACTION DATA SUMMARY:
-{transactions_summary}
+TASK: Generate Python code to analyze transaction data based on the user's query.
 
 USER QUERY: {query}
 
-Please analyze the transaction data and respond to the user's query. 
-Be precise, helpful, and use relevant transaction data to support your answer.
-For numerical analysis, include exact numbers where possible.
-If the user asks about fraud or risk, focus on transactions with label_for_fraud=1.
-If you need to refer to specific transactions, use their transaction IDs.
+TRANSACTION DATA SCHEMA:
+```python
+# Sample of the dataframe schema (first few rows shown):
+{df.head(2).to_string()}
+
+# Available columns:
+{', '.join(df.columns.tolist())}
+```
+
+INSTRUCTIONS:
+1. Write Python code that analyzes the transaction data to answer the user's query.
+2. The dataframe is already available as variable 'df'.
+3. Your code should:
+   - Include clear comments explaining what it's doing
+   - Generate visualizations when appropriate (using matplotlib)
+   - For visualization, use plt.tight_layout() and save the figure to a BytesIO object as explained below
+
+For visualizations, use the following code pattern:
+```python
+import io
+import base64
+import matplotlib.pyplot as plt
+
+# [... your analysis code ...]
+
+# Creating visualization
+plt.figure(figsize=(10, 5))
+# [... your plotting code ...]
+plt.title("Meaningful Title")
+plt.tight_layout()
+
+# Save figure to BytesIO object
+buffer = io.BytesIO()
+plt.savefig(buffer, format='png')
+buffer.seek(0)
+img_str = base64.b64encode(buffer.read()).decode()
+plt.close()
+
+# Return data including visualization - IMPORTANT: Use proper dictionary syntax
+output = {{
+    "summary": "A brief textual summary of the findings",
+    "visualization": img_str
+}}
+```
+
+RESPOND ONLY WITH PYTHON CODE, NO EXPLANATIONS OR COMMENTS OUTSIDE THE CODE BLOCK.
 """
             
-            # Generate content using Gemini
             contents = [
                 types.Content(
                     role="user",
-                    parts=[types.Part.from_text(text=prompt)],
+                    parts=[types.Part.from_text(text=code_prompt)],
                 ),
             ]
             
             generate_content_config = types.GenerateContentConfig(
-                temperature=0.2,  # Lower temperature for more factual responses
-                top_p=0.95,
-                top_k=40,
-                max_output_tokens=2048,
+                temperature=0.2,
+                max_output_tokens=4096,
                 response_mime_type="text/plain",
             )
             
+            code_response = self.client.models.generate_content(
+                model=self.model,
+                contents=contents,
+                config=generate_content_config,
+            )
+            
+            # Extract Python code from response
+            code_text = code_response.text
+            
+            # Clean up code - extract just the Python code if it's within markdown blocks
+            if "```python" in code_text and "```" in code_text:
+                code_text = re.search(r"```python\n(.*?)```", code_text, re.DOTALL).group(1)
+            elif "```" in code_text:
+                code_text = re.search(r"```\n(.*?)```", code_text, re.DOTALL).group(1)
+            
+            # Fix potential string formatting issues in the code
+            # Look for the output dictionary and ensure it's formatted correctly
+            code_text = self._fix_output_format(code_text)
+            
+            # Create a global/local scope for code execution
+            global_vars = {'df': df, 'pd': pd, 'plt': plt, 'io': io, 'base64': base64}
+            local_vars = {}
+            
+            # Execute the code
+            print("Executing generated Python code:")
+            print(code_text)
+            
             try:
-                response = self.client.models.generate_content(
-                    model=self.model,
-                    contents=contents,
-                    config=generate_content_config,
-                )
+                exec(code_text, global_vars, local_vars)
                 
-                # Extract text from response
-                return response.text
-            except Exception as e:
-                print(f"Error generating response: {e}")
-                # If API call fails, try fallback
-                return self._generate_fallback_response(query, transactions_data, customer_id)
+                # Extract the output
+                if 'output' in local_vars:
+                    analysis_output = local_vars['output']
+                    visualization_b64 = analysis_output.get('visualization')
+                    summary = analysis_output.get('summary', 'Analysis complete, see visualization for details.')
+                else:
+                    # If no output provided, create a fallback visualization
+                    visualization_b64, summary = self._create_fallback_visualization(df, query)
+            except Exception as code_exec_error:
+                print(f"Error executing generated code: {code_exec_error}")
+                # Create fallback visualization if code execution fails
+                visualization_b64, summary = self._create_fallback_visualization(df, query)
+            
+            # Generate a more detailed explanation using the analysis results
+            explanation_prompt = f"""You are a financial analyst explaining transaction data to a bank customer.
+
+USER QUERY: {query}
+
+ANALYSIS SUMMARY:
+{summary}
+
+TRANSACTION DATA OVERVIEW:
+Total transactions: {len(df)}
+Time period: {df['timestamp'].min() if 'timestamp' in df.columns else 'N/A'} to {df['timestamp'].max() if 'timestamp' in df.columns else 'N/A'}
+Total transaction amount: {df['transaction_amount'].sum() if 'transaction_amount' in df.columns else 'N/A'}
+Flagged transactions: {df['label_for_fraud'].sum() if 'label_for_fraud' in df.columns else 'N/A'}
+
+Explain the results of the analysis in a clear, concise way that directly answers the user's query.
+Include specific numbers and insights from the data.
+Your response should be conversational but precise.
+"""
+            
+            contents = [
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=explanation_prompt)],
+                ),
+            ]
+            
+            explanation_response = self.client.models.generate_content(
+                model=self.model,
+                contents=contents,
+                config=generate_content_config,
+            )
+            
+            explanation_text = explanation_response.text
+            
+            # Format the response with markdown for better readability
+            html_response = f"<h3>Transaction Analysis</h3><p>{explanation_text}</p>"
+            
+            return {
+                'response': explanation_text,
+                'html_response': html_response,
+                'is_transaction_query': True,
+                'canvas_data': {
+                    'code': code_text,
+                    'visualization': visualization_b64,
+                    'summary': summary
+                }
+            }
+            
         except Exception as e:
-            print(f"Unexpected error in generate_response: {e}")
-            return self._generate_fallback_response(query, transactions_data, customer_id)
+            error_message = f"I encountered an error while analyzing your transaction data: {str(e)}"
+            print(f"Error in transaction analysis: {e}")
+            
+            # Try to create a basic visualization even when the main function fails
+            try:
+                df = pd.DataFrame(transactions_data)
+                visualization_b64, summary = self._create_fallback_visualization(df, query)
+                
+                return {
+                    'response': f"I've analyzed your transaction data. {summary}",
+                    'html_response': f"<h3>Transaction Analysis</h3><p>{summary}</p>",
+                    'is_transaction_query': True,
+                    'canvas_data': {
+                        'visualization': visualization_b64,
+                        'summary': summary
+                    }
+                }
+            except Exception as fallback_error:
+                print(f"Error creating fallback visualization: {fallback_error}")
+                return {
+                    'response': error_message,
+                    'html_response': error_message,
+                    'is_transaction_query': True,
+                    'canvas_data': None
+                }
+                
+    def _create_fallback_visualization(self, df, query):
+        """
+        Create a basic visualization of transaction data when code generation fails.
+        
+        Args:
+            df (DataFrame): Pandas DataFrame with transaction data
+            query (str): The user's query
+            
+        Returns:
+            tuple: (base64_visualization, summary_text)
+        """
+        try:
+            plt.figure(figsize=(12, 6))
+            
+            # Determine what kind of visualization to create based on the query
+            query_lower = query.lower()
+            
+            if any(keyword in query_lower for keyword in ['fraud', 'suspicious', 'unusual']):
+                # Fraud-related visualization
+                # Create pie chart of fraud vs normal transactions
+                fraud_count = df['label_for_fraud'].sum()
+                normal_count = len(df) - fraud_count
+                
+                plt.subplot(1, 2, 1)
+                plt.pie([normal_count, fraud_count], 
+                       labels=['Normal', 'Flagged'], 
+                       autopct='%1.1f%%',
+                       colors=['#4CAF50', '#F44336'])
+                plt.title('Transaction Fraud Analysis')
+                
+                # Bar chart of suspicious transactions by location
+                plt.subplot(1, 2, 2)
+                fraud_df = df[df['label_for_fraud'] == 1]
+                if not fraud_df.empty:
+                    location_counts = fraud_df['location_data'].value_counts()
+                    location_counts.plot(kind='bar', color='#F44336')
+                    plt.title('Suspicious Transactions by Location')
+                    plt.xticks(rotation=45)
+                else:
+                    plt.text(0.5, 0.5, "No suspicious transactions found", 
+                             horizontalalignment='center', verticalalignment='center')
+                
+                summary = f"Found {fraud_count} suspicious transactions out of {len(df)} total transactions."
+                
+            elif any(keyword in query_lower for keyword in ['category', 'categories', 'spending']):
+                # Spending by category
+                category_spending = df.groupby('merchant_category')['transaction_amount'].sum().sort_values(ascending=False)
+                
+                plt.subplot(1, 2, 1)
+                category_spending.plot(kind='bar', color='#2196F3')
+                plt.title('Spending by Category')
+                plt.ylabel('Total Amount')
+                plt.xticks(rotation=45)
+                
+                # Pie chart of top categories
+                plt.subplot(1, 2, 2)
+                top_categories = category_spending.head(5)
+                other_amount = category_spending[5:].sum() if len(category_spending) > 5 else 0
+                if other_amount > 0:
+                    data = top_categories.tolist() + [other_amount]
+                    labels = top_categories.index.tolist() + ['Other']
+                else:
+                    data = top_categories.tolist()
+                    labels = top_categories.index.tolist()
+                    
+                plt.pie(data, labels=labels, autopct='%1.1f%%')
+                plt.title('Top Spending Categories')
+                
+                top_category = category_spending.index[0] if not category_spending.empty else "N/A"
+                summary = f"Your highest spending category is {top_category}, with ${category_spending.iloc[0]:.2f} in transactions."
+                
+            elif any(keyword in query_lower for keyword in ['time', 'trend', 'over time', 'pattern']):
+                # Time series visualization
+                df['date'] = pd.to_datetime(df['timestamp']).dt.date
+                daily_totals = df.groupby('date')['transaction_amount'].sum()
+                
+                plt.subplot(2, 1, 1)
+                daily_totals.plot(kind='line', marker='o', color='#4CAF50')
+                plt.title('Transaction Amounts Over Time')
+                plt.ylabel('Total Amount')
+                
+                plt.subplot(2, 1, 2)
+                transaction_counts = df.groupby('date').size()
+                transaction_counts.plot(kind='bar', color='#2196F3')
+                plt.title('Transaction Frequency Over Time')
+                plt.ylabel('Number of Transactions')
+                
+                highest_day = daily_totals.idxmax()
+                summary = f"Your highest spending day was {highest_day} with ${daily_totals.max():.2f} in transactions."
+                
+            elif any(keyword in query_lower for keyword in ['payment', 'method']):
+                # Payment method analysis
+                method_counts = df['method_of_transaction'].value_counts()
+                method_amounts = df.groupby('method_of_transaction')['transaction_amount'].sum()
+                
+                plt.subplot(1, 2, 1)
+                method_counts.plot(kind='bar', color='#673AB7')
+                plt.title('Transactions by Payment Method')
+                plt.ylabel('Number of Transactions')
+                plt.xticks(rotation=45)
+                
+                plt.subplot(1, 2, 2)
+                method_amounts.plot(kind='pie', autopct='%1.1f%%')
+                plt.title('Transaction Amount by Payment Method')
+                
+                most_used = method_counts.index[0] if not method_counts.empty else "N/A"
+                summary = f"Your most frequently used payment method is {most_used}, used for {method_counts.iloc[0]} transactions."
+                
+            else:
+                # General overview
+                plt.subplot(2, 2, 1)
+                df['transaction_amount'].plot(kind='hist', bins=20, color='#2196F3')
+                plt.title('Transaction Amount Distribution')
+                
+                plt.subplot(2, 2, 2)
+                category_counts = df['merchant_category'].value_counts().head(5)
+                category_counts.plot(kind='bar', color='#4CAF50')
+                plt.title('Top 5 Transaction Categories')
+                plt.xticks(rotation=45)
+                
+                plt.subplot(2, 2, 3)
+                method_counts = df['method_of_transaction'].value_counts()
+                method_counts.plot(kind='pie', autopct='%1.1f%%')
+                plt.title('Transactions by Payment Method')
+                
+                plt.subplot(2, 2, 4)
+                df['label_for_fraud'].value_counts().plot(kind='bar', color=['#4CAF50', '#F44336'])
+                plt.title('Normal vs Flagged Transactions')
+                plt.xticks([0, 1], ['Normal', 'Flagged'])
+                
+                avg_amount = df['transaction_amount'].mean()
+                summary = f"You have {len(df)} transactions with an average amount of ${avg_amount:.2f}."
+            
+            plt.tight_layout()
+            
+            # Save figure to BytesIO object
+            buffer = io.BytesIO()
+            plt.savefig(buffer, format='png')
+            buffer.seek(0)
+            img_str = base64.b64encode(buffer.read()).decode()
+            plt.close()
+            
+            return img_str, summary
+            
+        except Exception as e:
+            print(f"Error in fallback visualization: {e}")
+            # Return empty visualization
+            return None, "I was unable to create a visualization from your transaction data."
+    
+    def _fix_output_format(self, code_text):
+        """
+        Fix potential formatting issues in the generated code, particularly with the output dictionary.
+        
+        Args:
+            code_text (str): The generated Python code
+            
+        Returns:
+            str: Fixed Python code
+        """
+        # 1. Look for output dictionary definition lines
+        output_pattern = re.compile(r'output\s*=\s*{.*?}', re.DOTALL)
+        match = output_pattern.search(code_text)
+        
+        if match:
+            output_dict_text = match.group(0)
+            
+            # 2. Fix typical formatting errors
+            # Check for f-string formatting issues
+            if 'f"' in output_dict_text or "f'" in output_dict_text:
+                # Replace f-strings with regular strings
+                fixed_output_dict = re.sub(r'f(["\'])(.*?)\1', r'\1\2\1', output_dict_text)
+                code_text = code_text.replace(output_dict_text, fixed_output_dict)
+                
+            # Fix string formatting with % operator
+            if '"%' in output_dict_text or "'%" in output_dict_text:
+                fixed_output_dict = re.sub(r'(["\'])(.*?)%\((.*?)\)([sdf])\1', r'\1\2\1 % (\3)', output_dict_text)
+                code_text = code_text.replace(output_dict_text, fixed_output_dict)
+                
+            # Ensure proper dictionary format - replace any multiline with single line dict
+            if '\n' in output_dict_text and '"summary"' in output_dict_text and '"visualization"' in output_dict_text:
+                # Extract the summary and visualization values
+                summary_pattern = re.compile(r'"summary"\s*:\s*([^,}]+)')
+                summary_match = summary_pattern.search(output_dict_text)
+                
+                viz_pattern = re.compile(r'"visualization"\s*:\s*([^,}]+)')
+                viz_match = viz_pattern.search(output_dict_text)
+                
+                if summary_match and viz_match:
+                    summary_value = summary_match.group(1).strip()
+                    viz_value = viz_match.group(1).strip()
+                    
+                    # Create clean dictionary
+                    new_output_dict = f'output = {{"summary": {summary_value}, "visualization": {viz_value}}}'
+                    code_text = code_text.replace(output_dict_text, new_output_dict)
+        
+        # 3. Add default output code if no output dictionary is found
+        if 'output =' not in code_text and 'plt.savefig' in code_text:
+            # Typical case: visualization created but output dict missing
+            buffer_code = """
+# Ensure visualization is properly saved
+if 'buffer' not in locals():
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format='png')
+    buffer.seek(0)
+    
+img_str = base64.b64encode(buffer.read()).decode()
+plt.close()
+
+# Create proper output dictionary
+output = {
+    "summary": "Analysis of your transaction data is complete.",
+    "visualization": img_str
+}
+"""
+            code_text += buffer_code
+            
+        # 4. If there's still no output dictionary and no visualization
+        if 'output =' not in code_text:
+            # Add default output at the end
+            code_text += """
+# Ensure there's always an output
+output = {
+    "summary": "Analysis of your transaction data is complete.",
+    "visualization": None
+}
+"""
+            
+        return code_text
     
     def _generate_direct_response(self, query):
         """
