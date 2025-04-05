@@ -85,7 +85,7 @@ def dashboard(request):
 
 def compliance_dashboard(request):
     # Path to the transactions CSV file
-    csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'transactions_with_risk.csv')
+    csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'prodtest.csv')
     
     try:
         # Read the CSV file into a DataFrame
