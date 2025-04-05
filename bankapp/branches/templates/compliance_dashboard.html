@@ -166,7 +166,7 @@
                              data-account="{{ transaction.customer_account_number }}"
                              data-recipient="{{ transaction.to_recipient_customer_account }}"
                              data-risk="{{ transaction.risk_score }}"
-                             data-explanation="{{ transaction.risk_explanation|default:'No detailed risk explanation available.' }}">
+                             data-explanation="{{ transaction.risk_explanation|escape }}">
                             <div class="w-1/4">
                                 <div class="font-medium text-gray-900">Customer #{{ transaction.customer_account_number }}</div>
                                 <div class="text-gray-500 flex items-center gap-1.5">
@@ -225,6 +225,10 @@
                         Previous
                     </button>
                     {% endif %}
+                    
+                    <a href="?page={{ current_page }}&regenerate_risk=true" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200 text-sm font-medium">
+                        Recalculate Risk
+                    </a>
                     
                     {% if has_next %}
                     <a href="?page={{ current_page|add:'1' }}" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm font-medium">
@@ -329,6 +333,13 @@
                     const risk = this.getAttribute('data-risk');
                     const explanation = this.getAttribute('data-explanation');
                     
+                    console.log("Transaction clicked:", {
+                        customer,
+                        recipient,
+                        risk,
+                        explanation
+                    });
+                    
                     // Set modal content
                     document.getElementById('modal-customer').textContent = customer;
                     document.getElementById('modal-recipient').textContent = recipient;
@@ -345,7 +356,13 @@
                         riskScoreEl.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800';
                     }
                     
-                    document.getElementById('modal-explanation').textContent = explanation;
+                    // Display the explanation, making sure we don't show "undefined"
+                    const modalExplanation = document.getElementById('modal-explanation');
+                    if (explanation && explanation !== 'undefined' && explanation !== 'null') {
+                        modalExplanation.textContent = explanation;
+                    } else {
+                        modalExplanation.textContent = "Detailed risk assessment not available for this transaction.";
+                    }
                     
                     // Show modal
                     modal.classList.remove('hidden');
