@@ -1,6 +1,4 @@
-<!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,7 +7,7 @@
 </head>
 
 <body class="bg-gray-100">
-
+{% csrf_token %}
     <div class="container mx-auto p-6 space-y-6">
 
         <!-- Header -->
@@ -41,22 +39,28 @@
                 <h2 class="text-xl font-semibold mb-4">Compose Email</h2>
                 <div class="bg-white p-6 rounded-lg shadow">
                     <div class="mb-4">
+                        <label for="recipient" class="block text-sm font-medium text-gray-700">Recipient Email</label>
+                        <input type="email" 
+                               id="recipient" 
+                               class="input mt-1 block w-full" 
+                               placeholder="Enter recipient email or select segment">
+                        <div class="mt-1 text-sm text-gray-500">
+                            Leave empty to send to selected segment
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
                         <label for="subject" class="block text-sm font-medium text-gray-700">Subject Line</label>
                         <input type="text" id="subject" class="input mt-1 block w-full" placeholder="Enter email subject">
                     </div>
+                    
                     <div class="mb-4">
                         <label for="email-content" class="block text-sm font-medium text-gray-700">Email Content</label>
                         <textarea id="email-content" class="textarea mt-1 block w-full" rows="10" placeholder="Enter email content or generate it with AI"></textarea>
                     </div>
-                    <div class="flex justify-between items-center">
-                        <button class="btn btn-outline">Generate AI Content</button>
-                        <div class="flex space-x-2">
-                            <button class="btn btn-outline">Send Now</button>
-                            <button class="btn btn-outline">Schedule</button>
-                            <button class="btn btn-outline">Recurring</button>
-                        </div>
-                    </div>
-                    <button class="mt-4 btn btn-primary w-full">Send Email</button>
+                    
+                    <button class="mt-4 btn btn-primary w-full" onclick="sendEmail()">Send Email</button>
+
                 </div>
             </div>
         </div>
@@ -158,90 +162,179 @@
     </style>
 
     <script>
-        const segmentationQueries = {
-            "Demographic": {
-                "Age Group": "AGE_GROUP_QUERY",
-                "Geographic": "GEOGRAPHIC_QUERY",
-                "Regional (State)": "REGIONAL_STATE_QUERY",
-            },
-            "Financial Behaviour": {
-                "Account Type": "ACCOUNT_TYPE_QUERY",
-                "Multi-Product Relationship": "MULTI_PRODUCT_QUERY",
-                "Balance Tiers": "BALANCE_TIERS_QUERY",
-                "Credit Card Users vs Non-Users": "CREDIT_CARD_USERS_QUERY",
-            },
-            "Relationship Value": {
-                "Customer Lifetime Value": "CUSTOMER_LIFETIME_VALUE_QUERY",
-                "High Net Worth Individuals": "HIGH_NET_WORTH_INDIVIDUALS_QUERY",
-                "Cross-Selling Potential": "CROSS_SELLING_POTENTIAL_QUERY",
-            },
-            "Product Usage": {
-                "Loan Portfolio Analysis": "LOAN_PORTFOLIO_QUERY",
-                "Credit Card Preferences": "CREDIT_CARD_PREFERENCES_QUERY",
-                "Credit Limit Utilization": "CREDIT_LIMIT_UTILIZATION_QUERY",
-            },
-            "Risk Profile": {
-                "Loan Status Profile": "LOAN_STATUS_PROFILE_QUERY",
-                "Credit Risk Categories": "CREDIT_RISK_CATEGORIES_QUERY",
-            },
-            "Customer Lifecycle": {
-                "Relationship Tenure": "RELATIONSHIP_TENURE_QUERY",
-                "Branch Relationship Analysis": "BRANCH_RELATIONSHIP_QUERY",
-                "Product Adoption Timeline": "PRODUCT_ADOPTION_TIMELINE_QUERY",
-            },
-            "RFM Segmentation": {
-                "RFM Segmentation": "RFM_SEGMENTATION_QUERY",
-            },
-        };
+document.addEventListener("DOMContentLoaded", function() {
+    // Set up segment type select
+    const segmentTypeSelect = document.getElementById("segment-type");
+    for (const segmentType in segmentationQueries) {
+        const option = document.createElement("option");
+        option.value = segmentType;
+        option.textContent = segmentType;
+        segmentTypeSelect.appendChild(option);
+    }
 
-        document.addEventListener("DOMContentLoaded", function() {
-            const segmentTypeSelect = document.getElementById("segment-type");
-            for (const segmentType in segmentationQueries) {
-                const option = document.createElement("option");
-                option.value = segmentType;
-                option.textContent = segmentType;
-                segmentTypeSelect.appendChild(option);
-            }
-        });
-
-        function loadSubcategories() {
-            const segmentType = document.getElementById("segment-type").value;
-            const subcategorySelect = document.getElementById("segment-subcategory");
-            subcategorySelect.innerHTML = '<option value="">Select Subcategory</option>';
-
-            if (segmentType && segmentationQueries[segmentType]) {
-                const subcategories = segmentationQueries[segmentType];
-                for (const subcategory in subcategories) {
-                    const option = document.createElement("option");
-                    option.value = subcategory;
-                    option.textContent = subcategory;
-                    subcategorySelect.appendChild(option);
-                }
-            }
+    // Initialize tabs
+    const tabs = document.querySelectorAll('.tab-content');
+    tabs.forEach(tabContent => {
+        if (!tabContent.id.includes('recent')) {
+            tabContent.classList.add('hidden');
         }
+    });
+});
 
-        function loadSegmentData() {
-            const segmentType = document.getElementById("segment-type").value;
-            const subcategory = document.getElementById("segment-subcategory").value;
+// Define segmentation queries
+const segmentationQueries = {
+    "Demographic": {
+        "Age Group": "AGE_GROUP_QUERY",
+        "Geographic": "GEOGRAPHIC_QUERY",
+        "Regional (State)": "REGIONAL_STATE_QUERY",
+    },
+    "Financial Behaviour": {
+        "Account Type": "ACCOUNT_TYPE_QUERY",
+        "Multi-Product Relationship": "MULTI_PRODUCT_QUERY",
+        "Balance Tiers": "BALANCE_TIERS_QUERY",
+        "Credit Card Users vs Non-Users": "CREDIT_CARD_USERS_QUERY",
+    },
+    "Relationship Value": {
+        "Customer Lifetime Value": "CUSTOMER_LIFETIME_VALUE_QUERY",
+        "High Net Worth Individuals": "HIGH_NET_WORTH_INDIVIDUALS_QUERY",
+        "Cross-Selling Potential": "CROSS_SELLING_POTENTIAL_QUERY",
+    },
+    "Product Usage": {
+        "Loan Portfolio Analysis": "LOAN_PORTFOLIO_QUERY",
+        "Credit Card Preferences": "CREDIT_CARD_PREFERENCES_QUERY",
+        "Credit Limit Utilization": "CREDIT_LIMIT_UTILIZATION_QUERY",
+    },
+    "Risk Profile": {
+        "Loan Status Profile": "LOAN_STATUS_PROFILE_QUERY",
+        "Credit Risk Categories": "CREDIT_RISK_CATEGORIES_QUERY",
+    },
+    "Customer Lifecycle": {
+        "Relationship Tenure": "RELATIONSHIP_TENURE_QUERY",
+        "Branch Relationship Analysis": "BRANCH_RELATIONSHIP_QUERY",
+        "Product Adoption Timeline": "PRODUCT_ADOPTION_TIMELINE_QUERY",
+    },
+    "RFM Segmentation": {
+        "RFM Segmentation": "RFM_SEGMENTATION_QUERY",
+    },
+};
 
-            if (segmentType && subcategory) {
-                // Fetch and display segment data (implementation depends on your backend)
-                alert(`Loading data for ${segmentType} - ${subcategory}`);
-            } else {
-                alert("Please select both segment type and subcategory.");
-            }
+// Load subcategories when segment type changes
+function loadSubcategories() {
+    const segmentType = document.getElementById("segment-type").value;
+    const subcategorySelect = document.getElementById("segment-subcategory");
+    subcategorySelect.innerHTML = '<option value="">Select Subcategory</option>';
+
+    if (segmentType && segmentationQueries[segmentType]) {
+        const subcategories = segmentationQueries[segmentType];
+        for (const subcategory in subcategories) {
+            const option = document.createElement("option");
+            option.value = subcategory;
+            option.textContent = subcategory;
+            subcategorySelect.appendChild(option);
         }
+    }
+}
 
-        function showTab(tab) {
-            const tabs = document.querySelectorAll('.tab-content');
-            tabs.forEach(tabContent => tabContent.classList.add('hidden'));
-            document.getElementById(tab).classList.remove('hidden');
+// Load segment data when button is clicked
+function loadSegmentData() {
+    const segmentType = document.getElementById("segment-type").value;
+    const subcategory = document.getElementById("segment-subcategory").value;
 
-            const tabButtons = document.querySelectorAll('.tab-button');
-            tabButtons.forEach(button => button.classList.remove('active'));
-            event.target.classList.add('active');
+    if (segmentType && subcategory) {
+        // Fetch and display segment data (implementation depends on your backend)
+        alert(`Loading data for ${segmentType} - ${subcategory}`);
+    } else {
+        alert("Please select both segment type and subcategory.");
+    }
+}
+
+// Show the selected tab
+function showTab(tab) {
+    const tabs = document.querySelectorAll('.tab-content');
+    tabs.forEach(tabContent => tabContent.classList.add('hidden'));
+    document.getElementById(tab).classList.remove('hidden');
+
+    const tabButtons = document.querySelectorAll('.tab-button');
+    tabButtons.forEach(button => button.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+}
+
+// Send email function
+function sendEmail() {
+    const recipient = document.getElementById('recipient').value;
+    const subject = document.getElementById('subject').value;
+    const content = document.getElementById('email-content').value;
+    const segmentType = document.getElementById('segment-type').value;
+    const subcategory = document.getElementById('segment-subcategory').value;
+
+    // Validate inputs
+    if (!subject || !content) {
+        alert('Please fill in subject and content');
+        return;
+    }
+
+    if (!recipient && (!segmentType || !subcategory)) {
+        alert('Please either enter a recipient email or select a segment');
+        return;
+    }
+
+    // Get CSRF token
+    const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    // Send email using fetch API
+    fetch('/branches/send-email/', {  // Make sure this matches your Django URL configuration
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken,
+        },
+        body: JSON.stringify({
+            recipient,
+            subject,
+            content,
+            segmentType,
+            subcategory
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
         }
-    </script>
+        return response.json();
+    })
+    .then(data => {
+        alert(data.message || 'Email sent successfully');
+        updateEmailHistory(subject, recipient || `${segmentType} - ${subcategory}`);
+        clearForm();
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to send email: ' + error.message);
+    });
+}
+
+// Clear form after sending
+function clearForm() {
+    document.getElementById('recipient').value = '';
+    document.getElementById('subject').value = '';
+    document.getElementById('email-content').value = '';
+}
+
+// Update email history after sending
+function updateEmailHistory(subject, recipients) {
+    const historyDiv = document.getElementById('recent');
+    const now = new Date();
+    const newEmail = `
+        <div class="mb-4">
+            <h3 class="text-lg font-semibold">${subject}</h3>
+            <p class="text-gray-500">${now.toLocaleDateString()} · ${recipients}</p>
+            <span class="badge">Sent</span>
+            <span class="badge delivered">Delivered</span>
+        </div>
+    `;
+    historyDiv.insertAdjacentHTML('afterbegin', newEmail);
+}
+</script>
 
 </body>
 

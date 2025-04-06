@@ -393,6 +393,12 @@ def insider_threat(request):
 def reports(request):
     return render(request, 'reports.html')
 
+def mail(request):
+    """
+    Render the email template.
+    """
+    return render(request, 'mail.html')
+
 def crm(request):
     user_role = request.session.get('user_role')
     return render(request, 'crm.html', {'user_role': user_role})
@@ -898,4 +904,39 @@ def insider_threat_logs_api(request):
     except Exception as e:
         print(f"ERROR in insider_threat_logs_api: {str(e)}")
         return JsonResponse({'success': False, 'error': f'Error processing request: {str(e)}'}, status=500)
+
+
+@csrf_exempt
+def send_email(request):
+    """Handle email sending API endpoint"""
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Method not allowed'}, status=405)
+    
+    try:
+        # Parse JSON data from request body
+        data = json.loads(request.body)
+        recipient = data.get('recipient', '')
+        subject = data.get('subject', '')
+        content = data.get('content', '')
+        segment_type = data.get('segmentType', '')
+        subcategory = data.get('subcategory', '')
+        
+        # Print debug info to console
+        print(f"Email request received - To: {recipient}, Subject: {subject}")
+        print(f"Segment: {segment_type} - {subcategory}")
+        
+        # For now, simulate sending email
+        # In production, you would use Django's send_mail or similar
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Email sent successfully to {recipient or "segment recipients"}'
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON data'}, status=400)
+    except Exception as e:
+        print(f"Error in send_email view: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
 

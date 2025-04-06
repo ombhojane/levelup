@@ -14,5 +14,6 @@ urlpatterns = [
     path('chatbot/', views.chat_bot, name='chatbot'),  # Chatbot page
     path('fraud-detection/', views.fraud_detection, name='fraud_detection'),
     path('ecom-dashboard/', views.ecom_dashboard, name='ecom_dashboard'),  # Make sure this is present
-
+    path('send-email/', views.send_email, name='send_email'),  # Add this line for the email API endpoint
+    path('mail/', views.mail, name='mail'),  # Updated mail view
 ]
