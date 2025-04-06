@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 class Customer(models.Model):
     customer_id = models.CharField(max_length=20, primary_key=True)
@@ -13,3 +14,17 @@ class Customer(models.Model):
 
     def __str__(self):
         return self.name
+
+class EmailTemplate(models.Model):
+    subject = models.CharField(max_length=200)
+    content = models.TextField()
+    segment_type = models.CharField(max_length=100)
+    subcategory = models.CharField(max_length=100)
+    created_at = models.DateTimeField(default=timezone.now)
+    scheduled_time = models.DateTimeField(null=True, blank=True)
+    is_recurring = models.BooleanField(default=False)
+    status = models.CharField(max_length=20, default='draft')
+    recipient_count = models.IntegerField(default=0)
+
+    def __str__(self):
+        return self.subject
