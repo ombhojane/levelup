@@ -91,10 +91,134 @@ def dashboard(request):
     return render(request, 'dashboard.html', {'user_role': user_role})
 
 def ecom_dashboard(request):
-    context = {
-        'user_role': request.user.role if hasattr(request.user, 'role') else None,
-    }
-    return render(request, 'ecom_dashboard.html', context)
+    """
+    Render the E-Commerce Dashboard with data from CSV file
+    """
+    try:
+        # Define CSV path
+        csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'generated_ecommerce_data.csv')
+        
+        if not os.path.exists(csv_path):
+            raise FileNotFoundError(f"E-commerce data CSV not found at: {csv_path}")
+            
+        # Read the CSV data
+        df = pd.read_csv(csv_path)
+        
+        # Import numpy for random number generation
+        import numpy as np
+        
+        # Basic preprocessing - add fraud flag (simulated)
+        df['is_fraud'] = (df['payment_method'] == 0) | (df['ip_address'].str.startswith('200.')) | \
+                         ((df['order_amount'] > 9000) & (df['country'] != 'India'))
+        
+        # Calculate dashboard statistics
+        total_transactions = len(df)
+        fraud_transactions = df[df['is_fraud']].shape[0]
+        fraud_percentage = (fraud_transactions / total_transactions * 100) if total_transactions > 0 else 0
+        avg_risk_score = df.apply(lambda row: 80 if row['is_fraud'] else 25 + (row['order_amount'] / 10000 * 30), axis=1).mean()
+        
+        # Calculate chargebacks (flagged)
+        df['is_chargeback'] = ((df['order_amount'] - df['new_amount']) / df['order_amount'] > 0.1) & (df['coupon_used'] == 'YES')
+        chargebacks = df[df['is_chargeback']].shape[0]
+        
+        # Get high risk alerts (top 3 by risk score)
+        df['risk_score'] = df.apply(lambda row: 85 + np.random.randint(0, 15) if row['is_fraud'] 
+                                   else 20 + np.random.randint(0, 40), axis=1)
+        
+        high_risk_alerts = []
+        high_risk_df = df.sort_values(by='risk_score', ascending=False).head(3)
+        for i, (_, row) in enumerate(high_risk_df.iterrows()):
+            high_risk_alerts.append({
+                'transaction_id': row['transaction_id'],
+                'risk_score': int(row['risk_score']),
+                'amount': float(row['order_amount']),
+                'time_ago': f"{i*3+2} minutes ago"
+            })
+        
+        # Prepare chart data for fraud vs legitimate transactions
+        chart_data = {
+            'labels': ['Legitimate', 'Fraudulent'],
+            'data': [total_transactions - fraud_transactions, fraud_transactions]
+        }
+        
+        # Convert chart data to JSON string
+        import json
+        chart_data_json = json.dumps(chart_data)
+        
+        # Get recent transactions (top 10)
+        recent_transactions = []
+        recent_df = df.sort_values(by='timestamp', ascending=False).head(10)
+        
+        for _, row in recent_df.iterrows():
+            risk_score = int(row['risk_score'])
+            
+            if risk_score >= 70:
+                status = 'Flagged'
+                status_class = 'bg-red-100 text-red-800'
+            elif risk_score >= 40:
+                status = 'Review'
+                status_class = 'bg-yellow-100 text-yellow-800'
+            else:
+                status = 'Approved'
+                status_class = 'bg-green-100 text-green-800'
+            
+            transaction = {
+                'transaction_id': row['transaction_id'],
+                'user_id': f"U{row['customer_id'] % 10000}",
+                'risk_score': risk_score,
+                'country': row['country'],
+                'status': status,
+                'status_class': status_class,
+                'amount': float(row['order_amount'])
+            }
+            recent_transactions.append(transaction)
+        
+        # Debug print to see what's being passed to the template
+        print(f"Total transactions: {total_transactions}")
+        print(f"Fraud percentage: {fraud_percentage:.1f}%")
+        print(f"High risk alerts: {len(high_risk_alerts)}")
+        print(f"Recent transactions: {len(recent_transactions)}")
+        
+        # Context to pass to the template
+        context = {
+            'total_transactions': total_transactions,
+            'fraudulent_percentage': round(fraud_percentage, 1),
+            'avg_risk_score': round(avg_risk_score, 1),
+            'chargebacks_flagged': chargebacks,
+            'high_risk_alerts': high_risk_alerts,
+            'chart_data_json': chart_data_json,
+            'recent_transactions': recent_transactions,
+            'user_profile': {
+                'user_id': 'U7891',
+                'account_age': '5 yrs',
+                'region': 'Russia',
+                'kyc_status': 'Verified'
+            }
+        }
+        
+        return render(request, 'ecom_dashboard.html', context)
+        
+    except Exception as e:
+        import traceback
+        print(f"Error in ecom_dashboard: {str(e)}")
+        print(traceback.format_exc())
+        # Return the template with error information for debugging
+        return render(request, 'ecom_dashboard.html', {
+            'error': str(e),
+            'total_transactions': 0,
+            'fraudulent_percentage': 0,
+            'avg_risk_score': 0,
+            'chargebacks_flagged': 0,
+            'high_risk_alerts': [],
+            'chart_data_json': '{"labels":["Legitimate","Fraudulent"],"data":[0,0]}',
+            'recent_transactions': [],
+            'user_profile': {
+                'user_id': 'U0000',
+                'account_age': 'N/A',
+                'region': 'N/A',
+                'kyc_status': 'N/A'
+            }
+        })
 
 def compliance_dashboard(request):
     # Path to the transactions CSV file

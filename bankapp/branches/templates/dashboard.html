@@ -265,9 +265,15 @@
                     <div class="mt-4 text-blue-500 font-medium text-center">Loading...</div>
                 </div>
             </div>
+            {% if user_role == 'compliance' %}
             <iframe id="content-frame" name="content-frame" 
                     src="{% url 'compliance_dashboard' %}" 
                     class="w-full h-full bg-white rounded-xl shadow-lg transition-all duration-300"></iframe>
+            {% else %}
+            <iframe id="content-frame" name="content-frame" 
+                    src="{% url 'ecom_dashboard' %}" 
+                    class="w-full h-full bg-white rounded-xl shadow-lg transition-all duration-300"></iframe>
+            {% endif %}
         </main>
     </div>
 
