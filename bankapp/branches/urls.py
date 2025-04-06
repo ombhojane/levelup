@@ -1,6 +1,8 @@
 from django.urls import path
 from . import views
 
+app_name = 'branches'  # Define the application namespace
+
 urlpatterns = [
     path('input/', views.branch_input, name='branch_input'),  # Branch input page
     path('transactions/', views.transactions, name='transactions'),  # Transactions page
@@ -10,4 +12,7 @@ urlpatterns = [
     path('api/insider-threat/logs/', views.insider_threat_logs_api, name='insider_threat_logs_api'),  # Insider threat logs API
     path('api/transaction-chat/', views.transaction_chat, name='transaction_chat_api'),  # Transaction chat API endpoint
     path('chatbot/', views.chat_bot, name='chatbot'),  # Chatbot page
+    path('fraud-detection/', views.fraud_detection, name='fraud_detection'),
+    path('ecom-dashboard/', views.ecom_dashboard, name='ecom_dashboard'),  # Make sure this is present
+
 ]

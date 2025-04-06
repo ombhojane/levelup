@@ -23,7 +23,7 @@ from branches.views import (
     reports, mail, crm, compliance_dashboard, customer_experience,
     get_subcategories, get_segmentation_data, customers_page,
     logout_view, transactions, transaction_chat, risk_assessment_api,  # Add risk_assessment_api import
-    insider_threat_logs_api,chat_bot  # Import the insider threat logs API
+    insider_threat_logs_api,chat_bot,ecom_dashboard # Import the insider threat logs API
 )
 
 urlpatterns = [
@@ -38,6 +38,7 @@ urlpatterns = [
     path('pattern_analysis/', pattern_analysis, name='pattern_analysis'),  # Add URL pattern for pattern analysis
     path('insider_threat/', insider_threat, name='insider_threat'),  # Add URL pattern for insider threat
     path('chatbot/', chat_bot, name='chatbot'),  # Add URL pattern for chatbot
+    path('ecom_dashboard/', ecom_dashboard , name='ecom_dashboard'),  # Add URL pattern for e-commerce dashboard
     path('reports/', reports, name='reports'),  # Add URL pattern for reports
     path('mail/', mail, name='mail'),  # Add URL pattern for mail
     path('crm/', crm, name='crm'),  # Add URL pattern for CRM
