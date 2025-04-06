@@ -149,6 +149,63 @@
             margin-bottom: 1rem;
             color: #cbd5e1;
         }
+        /* DataFrame Table Styling */
+        .transaction-table-container {
+            margin-top: 1rem;
+            overflow-x: auto;
+            border-radius: 0.5rem;
+            border: 1px solid #e5e7eb;
+        }
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+        .table-striped tbody tr:nth-of-type(odd) {
+            background-color: rgba(0, 0, 0, 0.02);
+        }
+        .table-hover tbody tr:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+        .table th {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 2px solid #e5e7eb;
+            background-color: #f8fafc;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        /* Tabs for switching between visualization and dataframe */
+        .canvas-tabs {
+            display: flex;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 1rem;
+        }
+        .canvas-tab {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            font-weight: 500;
+            color: #64748b;
+        }
+        .canvas-tab.active {
+            color: #0066ff;
+            border-bottom-color: #0066ff;
+        }
+        .canvas-tab:hover:not(.active) {
+            color: #334155;
+            border-bottom-color: #cbd5e1;
+        }
+        .canvas-tab-content {
+            display: none;
+        }
+        .canvas-tab-content.active {
+            display: block;
+        }
     </style>
 </head>
 <body class="font-poppins">
@@ -166,7 +223,7 @@
             <!-- Chat area -->
             <div id="chatMessages" class="flex-1 flex flex-col p-6 overflow-y-auto">
                 <div class="bot-message chat-message">
-                    Hi there! I'm your bank's fraud detection assistant powered by Gemini AI. I can analyze your transaction data or answer questions about fraud prevention. How can I help you today?
+                    Hi there! I'm your bank's fraud detection assistant powered by Gemini AI. I can analyze your transaction data or answer questions about fraud prevention. You can also ask me to show your transaction details in a table. How can I help you today?
                 </div>
                 
                 <!-- Messages will be dynamically added here -->
@@ -181,10 +238,10 @@
                     What are common indicators of fraud?
                 </button>
                 <button class="starter-prompt bg-white border border-gray-300 px-5 py-2.5 text-sm rounded-full hover:bg-gray-100 transition-colors duration-300">
-                    Analyze my recent transaction patterns
+                    Show me my suspicious transactions
                 </button>
                 <button class="starter-prompt bg-white border border-gray-300 px-5 py-2.5 text-sm rounded-full hover:bg-gray-100 transition-colors duration-300">
-                    Show me any suspicious activity in my account
+                    Analyze my recent transaction patterns
                 </button>
             </div>
 
@@ -228,13 +285,30 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
                     </svg>
                     <h3 class="text-lg font-medium">No Data Visualization Yet</h3>
-                    <p class="mt-2">Ask about your transaction data to see analysis results here.</p>
-                    <p class="mt-1 text-sm">Try: "Analyze my recent transactions" or "Show me spending patterns"</p>
+                    <p class="mt-2">Ask about your transaction data to see analysis results or tables here.</p>
+                    <p class="mt-1 text-sm">Try: "Analyze my recent transactions" or "Show me my suspicious transactions"</p>
                 </div>
                 
                 <!-- Visualization canvas -->
                 <div id="visualizationContent" class="hidden">
-                    <canvas id="visualizationCanvas" class="w-full border border-gray-200 rounded"></canvas>
+                    <!-- Tabs for switching between visualization and dataframe -->
+                    <div class="canvas-tabs" id="canvasTabs">
+                        <div class="canvas-tab active" data-target="visualizationTab">Visualization</div>
+                        <div class="canvas-tab" data-target="dataframeTab">Data Table</div>
+                    </div>
+                    
+                    <!-- Visualization tab content -->
+                    <div id="visualizationTab" class="canvas-tab-content active">
+                        <canvas id="visualizationCanvas" class="w-full border border-gray-200 rounded"></canvas>
+                    </div>
+                    
+                    <!-- Dataframe tab content -->
+                    <div id="dataframeTab" class="canvas-tab-content">
+                        <div id="dataframeContainer" class="transaction-table-container">
+                            <!-- DataFrame HTML will be inserted here -->
+                        </div>
+                    </div>
+                    
                     <div id="summaryBox" class="canvas-info-box mt-4">
                         <h3 class="font-semibold mb-2">Analysis Summary</h3>
                         <div id="transactionSummary"><!-- Transaction summary will be inserted here --></div>
@@ -259,10 +333,30 @@
             const placeholderMessage = document.getElementById('placeholderMessage');
             const summaryBox = document.getElementById('summaryBox');
             const transactionSummary = document.getElementById('transactionSummary');
+            const dataframeContainer = document.getElementById('dataframeContainer');
+            const canvasTabs = document.querySelectorAll('.canvas-tab');
             
             // Initialize chat
             let isResizing = false;
             updateResizeHandlePosition();
+            
+            // Set up tab switching
+            canvasTabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // Remove active class from all tabs and content
+                    canvasTabs.forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.canvas-tab-content').forEach(content => {
+                        content.classList.remove('active');
+                    });
+                    
+                    // Add active class to clicked tab and its content
+                    this.classList.add('active');
+                    const targetContent = document.getElementById(this.dataset.target);
+                    if (targetContent) {
+                        targetContent.classList.add('active');
+                    }
+                });
+            });
             
             // Handle chatform submission
             chatForm.addEventListener('submit', function(e) {
@@ -329,7 +423,7 @@
             
             // Handle transaction visualization
             function handleTransactionVisualization(data) {
-                if (data.is_transaction_query && data.canvas_data && data.canvas_data.visualization) {
+                if (data.is_transaction_query && data.canvas_data) {
                     // Show visualization content and hide placeholder
                     visualizationContent.classList.remove('hidden');
                     placeholderMessage.classList.add('hidden');
@@ -339,8 +433,32 @@
                         transactionSummary.textContent = data.canvas_data.summary;
                     }
                     
-                    // Display visualization
-                    displayVisualization(data.canvas_data.visualization);
+                    // Handle dataframe HTML if available
+                    if (data.canvas_data.dataframe_html) {
+                        dataframeContainer.innerHTML = data.canvas_data.dataframe_html;
+                        
+                        // Show dataframe tab by default if visualization isn't available
+                        if (!data.canvas_data.visualization) {
+                            // Click the dataframe tab
+                            document.querySelector('.canvas-tab[data-target="dataframeTab"]').click();
+                        }
+                    } else {
+                        // Clear any previous dataframe
+                        dataframeContainer.innerHTML = '<div class="p-4 text-gray-500 text-center">No data table available for this query.</div>';
+                        
+                        // Make visualization tab active
+                        document.querySelector('.canvas-tab[data-target="visualizationTab"]').click();
+                    }
+                    
+                    // Display visualization if available
+                    if (data.canvas_data.visualization) {
+                        displayVisualization(data.canvas_data.visualization);
+                    } else {
+                        // Clear visualization
+                        const canvas = visualizationCanvas;
+                        const ctx = canvas.getContext('2d');
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    }
                     
                     // Expand canvas section if it's collapsed
                     if (chatSection.style.width === '80%') {

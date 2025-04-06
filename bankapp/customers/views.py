@@ -135,7 +135,6 @@ from django.http import HttpResponse
 from .models import Customer, Branch
 import logging
 from django.core.cache import cache
-from django.core.mail import send_mail
 from django.conf import settings
 from datetime import datetime
 
@@ -193,13 +192,6 @@ def search_customers(request):
             f"Searched {search_data['count']} times in 5 minutes."
         )
         logger.warning(alert_message)
-
-        send_mail(
-            subject="Insider Threat Alert - Unusual Search Activity",
-            message=alert_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=['mihiramin86@apsit.edu.in'],
-        )
 
     return render(request, 'customers/search.html')
 

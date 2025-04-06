@@ -20,7 +20,7 @@ from django.urls import path, include
 from branches.views import (
     branch_login, employee_login, compliance_login, dashboard,
     fraud_detection, risk_scoring, pattern_analysis, insider_threat,
-    reports, mail, crm, compliance_dashboard, customer_experience,
+    reports, crm, compliance_dashboard, customer_experience,
     get_subcategories, get_segmentation_data, customers_page,
     logout_view, transactions, transaction_chat, risk_assessment_api,  # Add risk_assessment_api import
     insider_threat_logs_api,chat_bot,ecom_dashboard # Import the insider threat logs API
@@ -40,7 +40,6 @@ urlpatterns = [
     path('chatbot/', chat_bot, name='chatbot'),  # Add URL pattern for chatbot
     path('ecom_dashboard/', ecom_dashboard , name='ecom_dashboard'),  # Add URL pattern for e-commerce dashboard
     path('reports/', reports, name='reports'),  # Add URL pattern for reports
-    path('mail/', mail, name='mail'),  # Add URL pattern for mail
     path('crm/', crm, name='crm'),  # Add URL pattern for CRM
     path('compliance_dashboard/', compliance_dashboard, name='compliance_dashboard'),  # Add URL pattern for compliance dashboard
     path('customer_experience/', customer_experience, name='customer_experience'),  # Add URL pattern for customer experience

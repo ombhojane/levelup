@@ -19,7 +19,6 @@ import markdown
 import bleach
 from django.utils.safestring import mark_safe
 from django.conf import settings
-from django.core.mail import send_mail
 
 # Import risk profiling modules
 try:
@@ -393,12 +392,6 @@ def insider_threat(request):
 
 def reports(request):
     return render(request, 'reports.html')
-
-# def mail(request):
-#     """
-#     Render the email template.
-#     """
-#     return render(request, 'mail.html')
 
 def crm(request):
     user_role = request.session.get('user_role')
@@ -905,89 +898,4 @@ def insider_threat_logs_api(request):
     except Exception as e:
         print(f"ERROR in insider_threat_logs_api: {str(e)}")
         return JsonResponse({'success': False, 'error': f'Error processing request: {str(e)}'}, status=500)
-
-@csrf_exempt
-
-# def send_email(request):
-#     if request.method == "POST":
-#         # your logic
-#         return JsonResponse({'message': 'Email sent successfully!'}, status=200)
-#     return JsonResponse({'message': 'Invalid request'}, status=400)
-
-# def send_email(request):
-#     if request.method != 'POST':
-#         return JsonResponse({'status': 'error', 'message': 'Method not allowed'}, status=405)
-    
-#     try:
-#         # Print request body for debugging
-#         print("Request body:", request.body)
-        
-#         data = json.loads(request.body)
-#         recipient = data.get('recipient')
-#         subject = data.get('subject')
-#         content = data.get('content')
-#         segment_type = data.get('segmentType')
-#         subcategory = data.get('subcategory')
-
-#         print(f"Received data: recipient={recipient}, subject={subject}, segment_type={segment_type}")
-
-#         # Validate required fields
-#         if not subject or not content:
-#             return JsonResponse({
-#                 'status': 'error',
-#                 'message': 'Subject and content are required'
-#             }, status=400)
-
-#         # Get recipients
-#         recipients = []
-#         if recipient:
-#             recipients = [recipient]
-#         elif segment_type and subcategory:
-#             # Add your segmentation logic here
-#             recipients = ['test@example.com']  # Placeholder
-#         else:
-#             return JsonResponse({
-#                 'status': 'error',
-#                 'message': 'Either recipient or segment must be specified'
-#             }, status=400)
-
-#         try:
-#             # Check if email settings are configured
-#             if not all([settings.EMAIL_HOST, settings.EMAIL_HOST_USER, settings.EMAIL_HOST_PASSWORD]):
-#                 return JsonResponse({
-#                     'status': 'error',
-#                     'message': 'Email settings not configured'
-#                 }, status=500)
-
-#             send_mail(
-#                 subject=subject,
-#                 message=content,
-#                 from_email=settings.EMAIL_HOST_USER,
-#                 recipient_list=recipients,
-#                 fail_silently=False,
-#             )
-#         except Exception as e:
-#             print(f"Email sending error: {str(e)}")
-#             return JsonResponse({
-#                 'status': 'error',
-#                 'message': f'Failed to send email: {str(e)}'
-#             }, status=500)
-
-#         return JsonResponse({
-#             'status': 'success',
-#             'message': f'Email sent successfully to {len(recipients)} recipient(s)'
-#         })
-
-#     except json.JSONDecodeError as e:
-#         print(f"JSON decode error: {str(e)}")
-#         return JsonResponse({
-#             'status': 'error',
-#             'message': 'Invalid JSON data'
-#         }, status=400)
-#     except Exception as e:
-#         print(f"Server error: {str(e)}")
-#         return JsonResponse({
-#             'status': 'error',
-#             'message': f'Server error: {str(e)}'
-#         }, status=500)
 

@@ -205,6 +205,8 @@ TRANSACTION DATA SCHEMA:
 # Available columns:
 {', '.join(df.columns.tolist())}
 ```
+IMPORTANT: All monetary values are in Indian Rupees (₹). Make sure everywhere use the ₹ symbol instead of $ and refer to the currency as "rupees" not "dollars".
+
 
 INSTRUCTIONS:
 1. Write Python code that analyzes the transaction data to answer the user's query.
@@ -213,6 +215,7 @@ INSTRUCTIONS:
    - Include clear comments explaining what it's doing
    - Generate visualizations when appropriate (using matplotlib)
    - For visualization, use plt.tight_layout() and save the figure to a BytesIO object as explained below
+   - If the user is asking to see transaction details or a specific subset of transactions, filter the dataframe accordingly and include it in the output
 
 For visualizations, use the following code pattern:
 ```python
@@ -239,6 +242,27 @@ plt.close()
 output = {{
     "summary": "A brief textual summary of the findings",
     "visualization": img_str
+}}
+```
+
+IF THE USER IS REQUESTING TO SEE TRANSACTION DETAILS OR DATA:
+Generate a filtered dataframe as needed for the query, and include it in the output dictionary like this:
+```python
+# Filter the dataframe based on the query
+filtered_df = df[df['label_for_fraud'] == 1]  # Example: filtering for suspicious transactions
+
+# Format the dataframe for display
+# Limit to 20 rows max to avoid overwhelming the UI
+display_df = filtered_df.head(20)
+
+# Convert to HTML for rendering in the canvas
+df_html = display_df.to_html(classes='table table-striped table-hover', border=0, index=False)
+
+# Return data including both filtered dataframe and optionally a visualization
+output = {{
+    "summary": "A brief textual summary of the findings",
+    "visualization": img_str if 'img_str' in locals() else None,
+    "dataframe_html": df_html
 }}
 ```
 
@@ -338,15 +362,22 @@ Your response should be conversational but precise.
             # Format the response with markdown for better readability
             html_response = f"<h3>Transaction Analysis</h3><p>{explanation_text}</p>"
             
+            # Prepare canvas data
+            canvas_data = {
+                'code': code_text,
+                'visualization': visualization_b64,
+                'summary': summary
+            }
+            
+            # If dataframe HTML was generated, include it in the canvas data
+            if 'output' in local_vars and 'dataframe_html' in local_vars['output']:
+                canvas_data['dataframe_html'] = local_vars['output']['dataframe_html']
+            
             return {
                 'response': explanation_text,
                 'html_response': html_response,
                 'is_transaction_query': True,
-                'canvas_data': {
-                    'code': code_text,
-                    'visualization': visualization_b64,
-                    'summary': summary
-                }
+                'canvas_data': canvas_data
             }
             
         except Exception as e:
@@ -555,21 +586,36 @@ Your response should be conversational but precise.
                 code_text = code_text.replace(output_dict_text, fixed_output_dict)
                 
             # Ensure proper dictionary format - replace any multiline with single line dict
-            if '\n' in output_dict_text and '"summary"' in output_dict_text and '"visualization"' in output_dict_text:
-                # Extract the summary and visualization values
+            if '\n' in output_dict_text and ('"summary"' in output_dict_text or '"visualization"' in output_dict_text):
+                # Extract key values
                 summary_pattern = re.compile(r'"summary"\s*:\s*([^,}]+)')
                 summary_match = summary_pattern.search(output_dict_text)
                 
                 viz_pattern = re.compile(r'"visualization"\s*:\s*([^,}]+)')
                 viz_match = viz_pattern.search(output_dict_text)
                 
-                if summary_match and viz_match:
+                df_html_pattern = re.compile(r'"dataframe_html"\s*:\s*([^,}]+)')
+                df_html_match = df_html_pattern.search(output_dict_text)
+                
+                # Build clean dictionary
+                new_output_dict = 'output = {'
+                
+                if summary_match:
                     summary_value = summary_match.group(1).strip()
+                    new_output_dict += f'"summary": {summary_value}'
+                else:
+                    new_output_dict += '"summary": "Analysis of your transaction data is complete."'
+                
+                if viz_match:
                     viz_value = viz_match.group(1).strip()
-                    
-                    # Create clean dictionary
-                    new_output_dict = f'output = {{"summary": {summary_value}, "visualization": {viz_value}}}'
-                    code_text = code_text.replace(output_dict_text, new_output_dict)
+                    new_output_dict += f', "visualization": {viz_value}'
+                
+                if df_html_match:
+                    df_html_value = df_html_match.group(1).strip()
+                    new_output_dict += f', "dataframe_html": {df_html_value}'
+                
+                new_output_dict += '}'
+                code_text = code_text.replace(output_dict_text, new_output_dict)
         
         # 3. Add default output code if no output dictionary is found
         if 'output =' not in code_text and 'plt.savefig' in code_text:
@@ -591,8 +637,29 @@ output = {
 }
 """
             code_text += buffer_code
+        
+        # 4. Check if there's a filtered dataframe that should be included in the output
+        if 'output =' not in code_text and ('filtered_df' in code_text or 'display_df' in code_text):
+            df_output_code = """
+# Create a dataframe HTML output if a filtered dataframe exists
+if 'filtered_df' in locals():
+    display_df = filtered_df.head(20)
+    df_html = display_df.to_html(classes='table table-striped table-hover', border=0, index=False)
+elif 'display_df' in locals():
+    df_html = display_df.to_html(classes='table table-striped table-hover', border=0, index=False)
+else:
+    df_html = None
+
+# Create proper output dictionary
+output = {
+    "summary": "Here are the transaction details you requested.",
+    "visualization": None if 'img_str' not in locals() else img_str,
+    "dataframe_html": df_html
+}
+"""
+            code_text += df_output_code
             
-        # 4. If there's still no output dictionary and no visualization
+        # 5. If there's still no output dictionary and no visualization
         if 'output =' not in code_text:
             # Add default output at the end
             code_text += """
@@ -626,7 +693,6 @@ USER QUERY: {query}
 Provide a helpful, accurate, and concise response focused on banking fraud and security.
 """
             
-            # Generate content using Gemini
             contents = [
                 types.Content(
                     role="user",
