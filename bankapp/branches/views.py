@@ -6,7 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 import pandas as pd
 import os
-from django.core.paginator import Paginator
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from .graph_utils import get_transaction_statistics
 from .neo4j_utils import Neo4jConnection, load_transaction_data, create_transaction_graph, get_neo4j_browser_url, generate_static_visualization, generate_standalone_visualization
 import json
@@ -627,51 +627,47 @@ def transactions(request):
         # Get transaction statistics
         stats = get_transaction_statistics(customer_id)
         
-        # Pagination - 10 transactions per page for display
-        page_number = request.GET.get('page', 1)
-        paginator = Paginator(all_transactions, 10)
-        page_obj = paginator.get_page(page_number)
-        
-        # Prepare chart data as JSON
-        import json
-        
-        # Methods chart data
-        methods_labels = list(stats.get('transaction_methods', {}).keys())
-        methods_data = list(stats.get('transaction_methods', {}).values())
-        
-        # Status chart data
-        status_data = [
-            stats.get('normal_transactions', 0),
-            stats.get('fraud_transactions', 0)
-        ]
-        
-        chart_data = {
-            'methods': {
-                'labels': methods_labels,
-                'data': methods_data
-            },
-            'status': {
-                'data': status_data
-            }
-        }
-        
-        # Graph data statistics
+        # Prepare graph data
         graph_data = {
-            'statistics': {
-                'total_transactions': len(all_transactions),
-                'fraud_transactions': sum(1 for t in all_transactions if t.get('label_for_fraud') == 1),
-                'normal_transactions': sum(1 for t in all_transactions if t.get('label_for_fraud') == 0)
-            }
+            'labels': [],
+            'amounts': [],
+            'dates': []
         }
         
-        # Calculate fraud percentage
-        if graph_data['statistics']['total_transactions'] > 0:
-            graph_data['statistics']['fraud_percentage'] = (
-                graph_data['statistics']['fraud_transactions'] / 
-                graph_data['statistics']['total_transactions'] * 100
-            )
-        else:
-            graph_data['statistics']['fraud_percentage'] = 0
+        # Sort transactions by date
+        if 'transaction_date' in filtered_df.columns:
+            sorted_df = filtered_df.sort_values('transaction_date')
+            graph_data['dates'] = sorted_df['transaction_date'].tolist()
+            graph_data['amounts'] = sorted_df['transaction_amount'].tolist()
+            graph_data['labels'] = [f"Transaction {i+1}" for i in range(len(sorted_df))]
+        
+        # Prepare chart data
+        chart_data = {
+            'labels': graph_data['labels'],
+            'datasets': [{
+                'label': 'Transaction Amount',
+                'data': graph_data['amounts'],
+                'backgroundColor': 'rgba(54, 162, 235, 0.2)',
+                'borderColor': 'rgba(54, 162, 235, 1)',
+                'borderWidth': 1
+            }]
+        }
+        
+        # Pagination
+        page_number = request.GET.get('page', 1)
+        try:
+            page_number = int(page_number)
+        except ValueError:
+            page_number = 1
+            
+        # Create paginator with 10 items per page
+        paginator = Paginator(all_transactions, 10)
+        
+        try:
+            page_obj = paginator.page(page_number)
+        except EmptyPage:
+            # If page is out of range, deliver last page
+            page_obj = paginator.page(paginator.num_pages)
         
         context = {
             'page_obj': page_obj,
@@ -686,8 +682,10 @@ def transactions(request):
         return render(request, 'transactions.html', context)
     
     except Exception as e:
-        return render(request, 'transactions.html', {'error': str(e)})
-
+        return render(request, 'transactions.html', {
+            'error': str(e),
+            'customer_id': customer_id
+        })
 @csrf_exempt
 @require_POST
 def transaction_chat(request):
