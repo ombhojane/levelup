@@ -627,32 +627,44 @@ def transactions(request):
         # Get transaction statistics
         stats = get_transaction_statistics(customer_id)
         
-        # Prepare graph data
-        graph_data = {
-            'labels': [],
-            'amounts': [],
-            'dates': []
-        }
+        # Methods chart data
+        methods_labels = list(stats.get('transaction_methods', {}).keys())
+        methods_data = list(stats.get('transaction_methods', {}).values())
         
-        # Sort transactions by date
-        if 'transaction_date' in filtered_df.columns:
-            sorted_df = filtered_df.sort_values('transaction_date')
-            graph_data['dates'] = sorted_df['transaction_date'].tolist()
-            graph_data['amounts'] = sorted_df['transaction_amount'].tolist()
-            graph_data['labels'] = [f"Transaction {i+1}" for i in range(len(sorted_df))]
-        
-        # Prepare chart data
+        # Status chart data
+        status_data = [
+            stats.get('normal_transactions', 0),
+            stats.get('fraud_transactions', 0)
+        ]
+
         chart_data = {
-            'labels': graph_data['labels'],
-            'datasets': [{
-                'label': 'Transaction Amount',
-                'data': graph_data['amounts'],
-                'backgroundColor': 'rgba(54, 162, 235, 0.2)',
-                'borderColor': 'rgba(54, 162, 235, 1)',
-                'borderWidth': 1
-            }]
+            'methods': {
+                'labels': methods_labels,
+                'data': methods_data
+            },
+            'status': {
+                'data': status_data
+            }
         }
         
+        # Graph data statistics
+        graph_data = {
+            'statistics': {
+                'total_transactions': len(all_transactions),
+                'fraud_transactions': sum(1 for t in all_transactions if t.get('label_for_fraud') == 1),
+                'normal_transactions': sum(1 for t in all_transactions if t.get('label_for_fraud') == 0)
+            }
+        }
+        
+        # Calculate fraud percentage
+        if graph_data['statistics']['total_transactions'] > 0:
+            graph_data['statistics']['fraud_percentage'] = (
+                graph_data['statistics']['fraud_transactions'] / 
+                graph_data['statistics']['total_transactions'] * 100
+            )
+        else:
+            graph_data['statistics']['fraud_percentage'] = 0
+            
         # Pagination
         page_number = request.GET.get('page', 1)
         try:
@@ -686,6 +698,8 @@ def transactions(request):
             'error': str(e),
             'customer_id': customer_id
         })
+    
+    
 @csrf_exempt
 @require_POST
 def transaction_chat(request):
